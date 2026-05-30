@@ -56,6 +56,14 @@ textarea.form-input{resize:vertical;min-height:52px;}
 .backup-row{display:flex;gap:7px;}
 .backup-row>*{flex:1;}
 .import-lbl{display:flex;align-items:center;justify-content:center;padding:13px;border-radius:10px;border:1px solid var(--border);color:var(--muted);font-size:15px;font-weight:700;cursor:pointer;font-family:'Noto Sans JP',sans-serif;}
+.backup-banner{display:none;margin:10px 14px 0;padding:12px 14px;background:#fff7ed;border:1.5px solid var(--accent2);border-radius:12px;}
+.backup-banner.show{display:block;}
+.backup-banner .bb-txt{font-size:13px;font-weight:600;color:#9a3412;margin-bottom:8px;line-height:1.5;}
+.backup-banner .bb-btn{width:100%;padding:11px;border:none;border-radius:9px;background:var(--accent2);color:#fff;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;}
+.snap-item{display:flex;align-items:center;justify-content:space-between;padding:11px 13px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;margin-bottom:7px;}
+.snap-date{font-family:'DM Mono',monospace;font-size:12px;color:var(--muted);}
+.snap-restore{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;}
+.lastbk{font-size:11px;color:var(--muted);margin-top:8px;text-align:center;}
 .task-item{display:flex;align-items:center;justify-content:space-between;padding:11px 13px;background:var(--surface);border-radius:10px;margin-bottom:7px;border:1px solid var(--border);border-left:4px solid var(--accent);}
 .task-item.p4{border-left-color:var(--accent2);}
 .task-date{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);margin-bottom:2px;}
@@ -190,6 +198,11 @@ textarea.form-input{resize:vertical;min-height:52px;}
 
 <div class="toast" id="toast"></div>
 
+<div class="backup-banner" id="bk-banner">
+  <div class="bb-txt">📦 大切なデータを守るため、バックアップ（保存）しましょう。<br>保存先は「ファイル」や「iCloud」がおすすめです。</div>
+  <button class="bb-btn" id="banner-backup-btn">今すぐバックアップする</button>
+</div>
+
 <!-- 記録タブ -->
 <div class="page active" id="page-record">
   <div class="month-bar">
@@ -234,11 +247,13 @@ textarea.form-input{resize:vertical;min-height:52px;}
     <div class="summary-box"><span class="val" id="sa2">¥0</span><div class="lbl">合計</div></div>
   </div>
   <div class="card">
-    <div class="card-title">データ管理</div>
+    <div class="card-title">データ管理・バックアップ</div>
     <div class="backup-row">
-      <button class="btn btn-outline" id="exp-btn">📥 エクスポート</button>
-      <label class="import-lbl">📤 インポート<input type="file" accept=".json" id="imp-input" style="display:none"></label>
+      <button class="btn btn-outline" id="exp-btn">📥 バックアップ保存</button>
+      <label class="import-lbl">📤 ファイルから復元<input type="file" accept=".json" id="imp-input" style="display:none"></label>
     </div>
+    <button class="btn btn-outline" id="restore-btn" style="margin-top:7px;">⏱ 自動保存から復元する</button>
+    <div class="lastbk" id="lastbk-txt"></div>
   </div>
   <div id="task-list"></div>
 </div>
@@ -438,6 +453,15 @@ textarea.form-input{resize:vertical;min-height:52px;}
   </div>
 </div>
 
+<!-- 自動保存から復元 -->
+<div class="sub-overlay" id="snap-overlay">
+  <div class="sub-box">
+    <div class="sub-title">自動保存から復元<strong>復元したい日時を選んでください</strong></div>
+    <div id="snap-list"></div>
+    <button class="sub-cancel" id="snap-close">閉じる</button>
+  </div>
+</div>
+
 <!-- 削除確認 -->
 <div class="confirm-ov" id="confirm-ov">
   <div class="confirm-box">
@@ -474,7 +498,7 @@ const DEFAULT_GROUPS=[
 
 const SKEY='fukugyou_v3';
 function load(){try{const s=localStorage.getItem(SKEY);if(s){const p=JSON.parse(s);return{tasks:p.tasks||[],groups:p.groups||JSON.parse(JSON.stringify(DEFAULT_GROUPS))};}}catch(e){}return{tasks:[],groups:JSON.parse(JSON.stringify(DEFAULT_GROUPS))};}
-function save(){try{localStorage.setItem(SKEY,JSON.stringify({tasks:st.tasks,groups:st.groups}));}catch(e){}}
+function save(){try{localStorage.setItem(SKEY,JSON.stringify({tasks:st.tasks,groups:st.groups}));}catch(e){}snapshot();}
 
 const now=new Date();
 const loaded=load();
@@ -499,6 +523,7 @@ function renderAll(){
   document.getElementById('sc2').textContent=cnt+'件';
   document.getElementById('sa2').textContent='¥'+amt.toLocaleString();
   renderList(tasks);
+  if(typeof refreshBanner==='function')refreshBanner();
 }
 
 function renderGrid(){
@@ -682,7 +707,8 @@ document.getElementById('exp-btn').onclick=function(){
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');a.href=url;a.download=`fukugyou_${new Date().toISOString().slice(0,10)}.json`;
   document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
-  toast('✅ エクスポートしました');
+  toast('✅ バックアップを保存しました');
+  setLastExport();
 };
 document.getElementById('imp-input').addEventListener('change',function(e){
   const file=e.target.files[0];if(!file)return;
@@ -985,6 +1011,38 @@ function toast(msg,isErr){
   t.textContent=msg;t.style.background=isErr?'var(--red)':'var(--green)';
   t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);
 }
+
+// ====================================================
+// 自動バックアップ
+// ====================================================
+const BKEY=SKEY+'_backups', LXKEY=SKEY+'_lastexp';
+function getSnaps(){try{return JSON.parse(localStorage.getItem(BKEY))||[];}catch(e){return[];}}
+function snapshot(){try{const json=JSON.stringify({tasks:st.tasks,groups:st.groups});const list=getSnaps();if(list[0]&&list[0].json===json)return;list.unshift({at:new Date().toISOString(),json});if(list.length>15)list.length=15;localStorage.setItem(BKEY,JSON.stringify(list));}catch(e){}}
+function fmtAt(iso){const d=new Date(iso);return`${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
+function setLastExport(){try{localStorage.setItem(LXKEY,new Date().toISOString());}catch(e){}updateLastBk();refreshBanner();}
+function bkStale(){const l=localStorage.getItem(LXKEY);if(!l)return st.tasks.length>0;return(Date.now()-new Date(l).getTime())>3*86400000;}
+function refreshBanner(){document.getElementById('bk-banner').classList.toggle('show',bkStale());}
+function updateLastBk(){const l=localStorage.getItem(LXKEY);document.getElementById('lastbk-txt').textContent=l?('前回のバックアップ保存：'+fmtAt(l)):'まだ一度もバックアップを保存していません';}
+function openSnaps(){
+  const list=getSnaps();const el=document.getElementById('snap-list');
+  if(!list.length){el.innerHTML='<div style="text-align:center;color:var(--muted);padding:20px 0;font-size:13px">まだ自動保存がありません</div>';}
+  else{el.innerHTML=list.map((s,i)=>{let cnt=0,amt=0;try{const d=JSON.parse(s.json);cnt=(d.tasks||[]).length;amt=(d.tasks||[]).reduce((a,t)=>a+(t.price||0),0);}catch(e){}return`<div class="snap-item"><div><div class="snap-date">${fmtAt(s.at)}</div><span style="font-size:13px">${cnt}件 ¥${amt.toLocaleString()}</span></div><button class="snap-restore" onclick="restoreSnap(${i})">復元</button></div>`;}).join('');}
+  document.getElementById('snap-overlay').classList.add('open');
+}
+function restoreSnap(i){
+  const list=getSnaps();const s=list[i];if(!s)return;
+  if(!confirm('この時点のデータに復元しますか？\n（今のデータは置き換わります）'))return;
+  try{const d=JSON.parse(s.json);st.tasks=d.tasks||[];st.groups=d.groups||JSON.parse(JSON.stringify(DEFAULT_GROUPS));save();renderGrid();renderAll();document.getElementById('snap-overlay').classList.remove('open');toast('✅ 復元しました');}
+  catch(e){toast('❌ 復元に失敗しました',true);}
+}
+document.getElementById('restore-btn').onclick=openSnaps;
+document.getElementById('snap-close').onclick=function(){document.getElementById('snap-overlay').classList.remove('open');};
+document.getElementById('snap-overlay').onclick=function(e){if(e.target===this)this.classList.remove('open');};
+document.getElementById('banner-backup-btn').onclick=function(){document.getElementById('exp-btn').click();};
+
+snapshot();
+updateLastBk();
+refreshBanner();
 
 renderGrid();
 renderAll();
