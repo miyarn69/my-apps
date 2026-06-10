@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>配車表</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap');
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #f0f2f5;
+  font-family: 'Noto Sans JP', sans-serif;
+  padding: 16px;
+  min-height: 100vh;
+}
+.page-header {
+  text-align: center;
+  margin-bottom: 20px;
+  background: #fff;
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+}
+.page-title { font-size: 0.85rem; font-weight: 700; color: #888; letter-spacing: 0.15em; }
+.page-date { font-size: 2rem; font-weight: 900; color: #1a1a2e; margin-top: 4px; }
+.page-day { font-size: 1rem; font-weight: 700; color: #555; margin-top: 2px; }
+.page-sub { font-size: 0.72rem; color: #aaa; margin-top: 6px; }
+
+.card {
+  background: #fff;
+  border-radius: 20px;
+  margin-bottom: 14px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+}
+.card-header {
+  padding: 16px 18px 12px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.driver-icon {
+  width: 56px; height: 56px;
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.3rem; font-weight: 900; color: #fff;
+  flex-shrink: 0;
+}
+.driver-label { font-size: 0.65rem; font-weight: 700; letter-spacing: 0.15em; color: #aaa; margin-bottom: 2px; }
+.driver-name { font-size: 1.5rem; font-weight: 900; color: #1a1a2e; line-height: 1.1; }
+.driver-summary { font-size: 0.7rem; color: #999; margin-top: 3px; }
+
+.courses { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 7px; }
+.course-item {
+  display: flex; align-items: center; gap: 12px;
+  background: #f8f9fc;
+  border-radius: 14px;
+  padding: 13px 15px;
+  border-left: 5px solid #ccc;
+}
+.course-num {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.8rem; font-weight: 900; color: #fff;
+  flex-shrink: 0;
+}
+.course-body { flex: 1; }
+.course-time { font-size: 0.75rem; font-weight: 700; color: #999; line-height: 1.2; }
+.course-name { font-size: 1.2rem; font-weight: 900; color: #1a1a2e; margin-top: 2px; line-height: 1.2; }
+.arrow { text-align: center; font-size: 1rem; color: #ddd; margin: -3px 14px; }
+
+.card-footer {
+  padding: 10px 18px 13px;
+  border-top: 1px solid #f5f5f5;
+  display: flex; align-items: center; gap: 8px;
+}
+.footer-label { font-size: 0.68rem; color: #bbb; font-weight: 700; }
+.footer-value { font-size: 0.82rem; font-weight: 900; color: #444; }
+.footer-badge {
+  margin-left: auto; font-size: 0.63rem; font-weight: 700;
+  background: #e8f5e9; color: #2e7d32;
+  border-radius: 999px; padding: 3px 10px;
+}
+
+.section-label {
+  font-size: 0.65rem; font-weight: 900; letter-spacing: 0.2em;
+  color: #bbb; text-transform: uppercase;
+  margin: 22px 4px 10px;
+  display: flex; align-items: center; gap: 8px;
+}
+.section-label::after {
+  content: ''; flex: 1; height: 1px; background: #e0e0e0;
+}
+
+/* カラー */
+.cA{background:#e53935;} .cB{background:#fb8c00;} .cC{background:#f9a825;}
+.cD{background:#43a047;} .cE{background:#00897b;} .cF{background:#1e88e5;}
+.cG{background:#8e24aa;} .cH{background:#d81b60;} .cI{background:#00acc1;}
+.cJ{background:#7cb342;} .cSP{background:#757575;}
+.bA{border-left-color:#e53935;} .bB{border-left-color:#fb8c00;} .bC{border-left-color:#f9a825;}
+.bD{border-left-color:#43a047;} .bE{border-left-color:#00897b;} .bF{border-left-color:#1e88e5;}
+.bG{border-left-color:#8e24aa;} .bH{border-left-color:#d81b60;} .bI{border-left-color:#00acc1;}
+.bJ{border-left-color:#7cb342;} .bSP{border-left-color:#757575;}
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <div class="page-title">本日の配車表</div>
+  <div class="page-date">6月10日</div>
+  <div class="page-day">火曜日</div>
+  <div class="page-sub">全員法令準拠・拘束時間確認済み ✅</div>
+</div>
+
+<!-- ① レギュラー -->
+<div class="section-label">① レギュラー</div>
+
+<!-- 田中 -->
+<div class="card">
+  <div class="card-header">
+    <div class="driver-icon cA">田</div>
+    <div class="driver-info">
+      <div class="driver-label">レギュラー</div>
+      <div class="driver-name">田中 一郎</div>
+      <div class="driver-summary">4コース ／ 5:40 出発</div>
+    </div>
+  </div>
+  <div class="courses">
+    <div class="course-item bA">
+      <div class="course-num cA">1</div>
+      <div class="course-body">
+        <div class="course-time">5:40 → 7:15</div>
+        <div class="course-name">和白下1補助</div>
+      </div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="course-item bA">
+      <div class="course-num cA">2</div>
+      <div class="course-body">
+        <div class="course-time">8:40 → 10:50</div>
+        <div class="course-name">直方補助下1上1</div>
+      </div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="course-item bA">
+      <div class="course-num cA">3</div>
+      <div class="course-body">
+        <div class="course-time">12:00 → 14:35</div>
+        <div class="course-name">筑紫下3上2</div>
+      </div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="course-item bA">
+      <div class="course-num cA">4</div>
+      <div class="course-body">
+        <div class="course-time">14:55 → 16:45</div>
+        <div class="course-name">筑紫野下補助</div>
+      </div>
+    </div>
+  </div>
+  <div class="card-footer">
+    <div class="footer-label">拘束時間</div>
+    <div class="footer-value">11時間05分</div>
+    <div class="footer-badge">✓ 法令内</div>
+  </div>
+</div>
+
+<!-- 山本 -->
+<div class="card">
+  <div class="card-header">
+    <div class="driver-icon cB">山</div>
+    <div class="driver-info">
+      <div class="driver-label">レギュラー</div>
+      <div class="driver-name">山本 次郎</div>
+      <div class="driver-summary">3コース ／ 4:40 出発</div>
+    </div>
+  </div>
+  <div class="courses">
+    <div class="course-item bB">
+      <div class="course-num cB">1</div>
+      <div class="course-body">
+        <div class="course-time">4:40 → 6:05</div>
+        <div class="course-name">筑紫下2補助</div>
+      </div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="course-item bB">
+      <div class="course-num cB">2</div>
+      <div class="course-body">
+        <div class="course-time">6:35 → 9:30</div>
+        <div class="course-name">城南下3上1</div>
+      </div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="course-item bB">
+      <div class="course-num cB">3</div>
+      <div class="course-body">
+        <div class="course-time">12:25 → 16:20</div>
+        <div class="course-name">行橋下2上1</div>
+      </div>
+    </div>
+  </div>
+  <div class="card-footer">
+    <div class="footer-label">拘束時間</div>
+    <div class="footer-value">11時間40分</div>
+    <div class="footer-badge">✓ 法令内</div>
+  </div>
+</div>
+
+<!-- 佐藤 -->
+<div class="card">
+  <div class="card-header">
+    <div class="driver-icon cC">佐</div>
+    <div class="driver-info">
+      <div class="driver-label">レギュラー</div>
+      <div class="driver-name">佐藤 三郎</div>
+      <div class="driver-summary">3コース ／ 5:10 出発</div>
+    </div>
+  </div>
+  <div class="courses">
+    <div class="course-item bC">
+      <div class="course-num cC">1</div>
+      <div class="course-body">
+        <div class="course-time">5:10 → 6:40</div>
+        <div class="course-name">福岡南下補助1</div>
+      </div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="course-item bC">
+      <div class="course-num cC">2</div>
+      <div class="course-body">
+        <div class="course-time">12:15 → 13:45</div>
+        <div class="course-name">博多南下6上3</div>
+      </div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="course-item bC">
+      <div class="course-num cC">3</div>
+      <div class="course-body">
+        <div class="course-time">15:00 → 16:45</div>
+        <div class="course-name">福岡下9上6</div>
+      </div>
+    </div>
+  </div>
+  <div class="card-footer">
+    <div class="footer-label">拘束時間</div>
+    <div class="footer-value">11時間35分</div>
+    <div class="footer-badge">✓ 法令内</div>
+  </div>
+</div>
+
+<!-- ② 準レギュラー -->
+<div class="section-label">② 準レギュラー</div>
+
+<!-- 鈴木 -->
+<div class="card">
+  <div class="card-header">
+    <div class="driver-icon cD">鈴</div>
+    <div class="driver-info">
+      <div class="driver-label">準レギュラー</div>
+      <div class="driver-name">鈴木 健太</div>
+      <div class="driver-summary">2コース ／ 11:30 出発</div>
+    </div>
+  </div>
+  <div class="courses">
+    <div class="course-item bD">
+      <div class="course-num cD">1</div>
+      <div class="course-body">
+        <div class="course-time">11:30 → 13:25</div>
+        <div class="course-name">筑紫下2福南上1</div>
+      </div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="course-item bD">
+      <div class="course-num cD">2</div>
+      <div class="course-body">
+        <div class="course-time">14:05 → 15:35</div>
+        <div class="course-name">博多南下7上4</div>
+      </div>
+    </div>
+  </div>
+  <div class="card-footer">
+    <div class="footer-label">拘束時間</div>
+    <div class="footer-value">4時間05分</div>
+    <div class="footer-badge">✓ 法令内</div>
+  </div>
+</div>
+
+<!-- 高橋 -->
+<div class="card">
+  <div class="card-header">
+    <div class="driver-icon cE">高</div>
+    <div class="driver-info">
+      <div class="driver-label">準レギュラー</div>
+      <div class="driver-name">高橋 誠</div>
+      <div class="driver-summary">2コース ／ 16:45 出発</div>
+    </div>
+  </div>
+  <div class="courses">
+    <div class="course-item bE">
+      <div class="course-num cE">1</div>
+      <div class="course-body">
+        <div class="course-time">16:45 → 18:10</div>
+        <div class="course-name">福岡南下補助2上補助</div>
+      </div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="course-item bE">
+      <div class="course-num cE">2</div>
+      <div class="course-body">
+        <div class="course-time">18:35 → 19:50</div>
+        <div class="course-name">和白下5上4</div>
+      </div>
+    </div>
+  </div>
+  <div class="card-footer">
+    <div class="footer-label">拘束時間</div>
+    <div class="footer-value">3時間05分</div>
+    <div class="footer-badge">✓ 法令内</div>
+  </div>
+</div>
+
+<!-- 伊藤 -->
+<div class="card">
+  <div class="card-header">
+    <div class="driver-icon cF">伊</div>
+    <div class="driver-info">
+      <div class="driver-label">準レギュラー</div>
+      <div class="driver-name">伊藤 浩二</div>
+      <div class="driver-summary">2コース ／ 15:20 出発</div>
+    </div>
+  </div>
+  <div class="courses">
+    <div class="course-item bF">
+      <div class="course-num cF">1</div>
+      <div class="course-body">
+        <div class="course-time">15:20 → 17:50</div>
+        <div class="course-name">福西補助下上</div>
+      </div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="course-item bF">
+      <div class="course-num cF">2</div>
+      <div class="course-body">
+        <div class="course-time">18:45 → 20:10</div>
+        <div class="course-name">飯塚上3</div>
+      </div>
+    </div>
+  </div>
+  <div class="card-footer">
+    <div class="footer-label">拘束時間</div>
+    <div class="footer-value">4時間50分</div>
+    <div class="footer-badge">✓ 法令内</div>
+  </div>
+</div>
+
+<!-- ③ 準々レギュラー -->
+<div class="section-label">③ 準々レギュラー</div>
+
+<!-- 渡辺 -->
+<div class="card">
+  <div class="card-header">
+    <div class="driver-icon cG">渡</div>
+    <div class="driver-info">
+      <div class="driver-label">準々レギュラー</div>
+      <div class="driver-name">渡辺 隆</div>
+      <div class="driver-summary">2コース ／ 15:25 出発</div>
+    </div>
+  </div>
+  <div class="courses">
+    <div class="course-item bG">
+      <div class="course-num cG">1</div>
+      <div class="course-body">
+        <div class="course-time">15:25 → 19:00</div>
+        <div class="course-name">前原下4上3</div>
+      </div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="course-item bG">
+      <div class="course-num cG">2</div>
+      <div class="course-body">
+        <div class="course-time">19:45 → 21:15</div>
+        <div class="course-name">福岡上14</div>
+      </div>
+    </div>
+  </div>
+  <div class="card-footer">
+    <div class="footer-label">拘束時間</div>
+    <div class="footer-value">5時間50分</div>
+    <div class="footer-badge">✓ 法令内</div>
+  </div>
+</div>
+
+<!-- 中村 -->
+<div class="card">
+  <div class="card-header">
+    <div class="driver-icon cH">中</div>
+    <div class="driver-info">
+      <div class="driver-label">準々レギュラー</div>
+      <div class="driver-name">中村 博</div>
+      <div class="driver-summary">2コース ／ 15:30 出発</div>
+    </div>
+  </div>
+  <div class="courses">
+    <div class="course-item bH">
+      <div class="course-num cH">1</div>
+      <div class="course-body">
+        <div class="course-time">15:30 → 18:30</div>
+        <div class="course-name">和白下補助3上補助①</div>
+      </div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="course-item bH">
+      <div class="course-num cH">2</div>
+      <div class="course-body">
+        <div class="course-time">18:40 → 20:20</div>
+        <div class="course-name">博多南下回送上8</div>
+      </div>
+    </div>
+  </div>
+  <div class="card-footer">
+    <div class="footer-label">拘束時間</div>
+    <div class="footer-value">4時間50分</div>
+    <div class="footer-badge">✓ 法令内</div>
+  </div>
+</div>
+
+<!-- 小林 -->
+<div class="card">
+  <div class="card-header">
+    <div class="driver-icon cI">小</div>
+    <div class="driver-info">
+      <div class="driver-label">準々レギュラー</div>
+      <div class="driver-name">小林 修</div>
+      <div class="driver-summary">3コース ／ 15:35 出発</div>
+    </div>
+  </div>
+  <div class="courses">
+    <div class="course-item bI">
+      <div class="course-num cI">1</div>
+      <div class="course-body">
+        <div class="course-time">15:35 → 17:05</div>
+        <div class="course-name">福岡東下4上1</div>
+      </div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="course-item bI">
+      <div class="course-num cI">2</div>
+      <div class="course-body">
+        <div class="course-time">17:25 → 18:30</div>
+        <div class="course-name">和白下補助3上補助②</div>
+      </div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="course-item bI">
+      <div class="course-num cI">3</div>
+      <div class="course-body">
+        <div class="course-time">18:45 → 19:40</div>
+        <div class="course-name">福岡東下補助上2</div>
+      </div>
+    </div>
+  </div>
+  <div class="card-footer">
+    <div class="footer-label">拘束時間</div>
+    <div class="footer-value">4時間05分</div>
+    <div class="footer-badge">✓ 法令内</div>
+  </div>
+</div>
+
+<!-- 加藤 -->
+<div class="card">
+  <div class="card-header">
+    <div class="driver-icon cJ">加</div>
+    <div class="driver-info">
+      <div class="driver-label">準々レギュラー</div>
+      <div class="driver-name">加藤 清</div>
+      <div class="driver-summary">2コース ／ 17:20 出発</div>
+    </div>
+  </div>
+  <div class="courses">
+    <div class="course-item bJ">
+      <div class="course-num cJ">1</div>
+      <div class="course-body">
+        <div class="course-time">17:20 → 18:50</div>
+        <div class="course-name">福岡上8</div>
+      </div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="course-item bJ">
+      <div class="course-num cJ">2</div>
+      <div class="course-body">
+        <div class="course-time">19:10 → 20:00</div>
+        <div class="course-name">博多北上9</div>
+      </div>
+    </div>
+  </div>
+  <div class="card-footer">
+    <div class="footer-label">拘束時間</div>
+    <div class="footer-value">2時間40分</div>
+    <div class="footer-badge">✓ 法令内</div>
+  </div>
+</div>
+
+<!-- ④ スポット -->
+<div class="section-label">④ スポット</div>
+
+<!-- 吉田 -->
+<div class="card">
+  <div class="card-header">
+    <div class="driver-icon cSP">吉</div>
+    <div class="driver-info">
+      <div class="driver-label">スポット</div>
+      <div class="driver-name">吉田 勝</div>
+      <div class="driver-summary">1コース ／ 5:20 出発</div>
+    </div>
+  </div>
+  <div class="courses">
+    <div class="course-item bSP">
+      <div class="course-num cSP">1</div>
+      <div class="course-body">
+        <div class="course-time">5:20 → 6:30</div>
+        <div class="course-name">福岡西下2</div>
+      </div>
+    </div>
+  </div>
+  <div class="card-footer">
+    <div class="footer-label">拘束時間</div>
+    <div class="footer-value">1時間10分</div>
+    <div class="footer-badge">✓ 法令内</div>
+  </div>
+</div>
+
+<!-- 松本 -->
+<div class="card">
+  <div class="card-header">
+    <div class="driver-icon cSP">松</div>
+    <div class="driver-info">
+      <div class="driver-label">スポット</div>
+      <div class="driver-name">松本 義雄</div>
+      <div class="driver-summary">1コース ／ 5:30 出発</div>
+    </div>
+  </div>
+  <div class="courses">
+    <div class="course-item bSP">
+      <div class="course-num cSP">1</div>
+      <div class="course-body">
+        <div class="course-time">5:30 → 7:35</div>
+        <div class="course-name">伊田下1</div>
+      </div>
+    </div>
+  </div>
+  <div class="card-footer">
+    <div class="footer-label">拘束時間</div>
+    <div class="footer-value">2時間05分</div>
+    <div class="footer-badge">✓ 法令内</div>
+  </div>
+</div>
+
+<!-- 井上 -->
+<div class="card">
+  <div class="card-header">
+    <div class="driver-icon cSP">井</div>
+    <div class="driver-info">
+      <div class="driver-label">スポット</div>
+      <div class="driver-name">井上 正夫</div>
+      <div class="driver-summary">1コース ／ 5:45 出発</div>
+    </div>
+  </div>
+  <div class="courses">
+    <div class="course-item bSP">
+      <div class="course-num cSP">1</div>
+      <div class="course-body">
+        <div class="course-time">5:45 → 7:45</div>
+        <div class="course-name">福間下補助</div>
+      </div>
+    </div>
+  </div>
+  <div class="card-footer">
+    <div class="footer-label">拘束時間</div>
+    <div class="footer-value">2時間00分</div>
+    <div class="footer-badge">✓ 法令内</div>
+  </div>
+</div>
+
+<!-- 木村 -->
+<div class="card">
+  <div class="card-header">
+    <div class="driver-icon cSP">木</div>
+    <div class="driver-info">
+      <div class="driver-label">スポット</div>
+      <div class="driver-name">木村 茂</div>
+      <div class="driver-summary">1コース ／ 16:10 出発</div>
+    </div>
+  </div>
+  <div class="courses">
+    <div class="course-item bSP">
+      <div class="course-num cSP">1</div>
+      <div class="course-body">
+        <div class="course-time">16:10 → 19:45</div>
+        <div class="course-name">宗像下5上4</div>
+      </div>
+    </div>
+  </div>
+  <div class="card-footer">
+    <div class="footer-label">拘束時間</div>
+    <div class="footer-value">3時間35分</div>
+    <div class="footer-badge">✓ 法令内</div>
+  </div>
+</div>
+
+<!-- 林 -->
+<div class="card">
+  <div class="card-header">
+    <div class="driver-icon cSP">林</div>
+    <div class="driver-info">
+      <div class="driver-label">スポット</div>
+      <div class="driver-name">林 和夫</div>
+      <div class="driver-summary">1コース ／ 18:10 出発</div>
+    </div>
+  </div>
+  <div class="courses">
+    <div class="course-item bSP">
+      <div class="course-num cSP">1</div>
+      <div class="course-body">
+        <div class="course-time">18:10 → 20:10</div>
+        <div class="course-name">福岡中央下11上13</div>
+      </div>
+    </div>
+  </div>
+  <div class="card-footer">
+    <div class="footer-label">拘束時間</div>
+    <div class="footer-value">2時間00分</div>
+    <div class="footer-badge">✓ 法令内</div>
+  </div>
+</div>
+
+</body>
+</html>
