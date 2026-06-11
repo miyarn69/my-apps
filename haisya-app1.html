@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>配車入力（試験版）</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --blue: #1a237e;
+    --blue2: #3949ab;
+    --green: #2e7d32;
+    --red: #d32f2f;
+    --orange: #ef6c00;
+    --gray: #6b7280;
+    --bg: #f0f2f5;
+  }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    font-family: -apple-system, "Hiragino Sans", sans-serif;
+    background: var(--bg);
+    color: #1f2937;
+    padding-bottom: 90px;
+  }
+  .header {
+    background: linear-gradient(135deg, #1a237e, #283593);
+    color: #fff;
+    padding: max(14px, env(safe-area-inset-top)) 16px 14px;
+    position: sticky; top: 0; z-index: 50;
+  }
+  .header h1 { font-size: 17px; font-weight: 800; }
+  .header p { font-size: 11px; opacity: .75; margin-top: 2px; }
+
+  .wrap { padding: 14px; max-width: 560px; margin: 0 auto; }
+
+  .card {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.06);
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+  .card h2 { font-size: 15px; font-weight: 800; margin-bottom: 12px; }
+
+  label.lbl { display: block; font-size: 12px; font-weight: 700; color: #374151; margin-bottom: 5px; }
+  input, select, textarea {
+    width: 100%;
+    padding: 12px;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 12px;
+    font: inherit;
+    font-size: 16px; /* iPhoneのズーム防止 */
+    background: #fafafa;
+  }
+  input:focus, select:focus { outline: none; border-color: #2563eb; background: #fff; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+  .full { margin-bottom: 12px; }
+
+  /* ── 便選択 ── */
+  .group-title {
+    font-size: 12px; font-weight: 800; color: #fff;
+    padding: 6px 12px; border-radius: 8px;
+    margin: 14px 0 8px;
+    display: inline-block;
+  }
+  .g-morning { background: #f59e0b; }
+  .g-day     { background: #10b981; }
+  .g-evening { background: #6366f1; }
+
+  .route-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 8px;
+    border: 2px solid #e5e7eb;
+    border-radius: 12px;
+    background: #fff;
+    font: inherit;
+    text-align: left;
+    -webkit-tap-highlight-color: transparent;
+    transition: all .15s;
+  }
+  .route-btn .r-name { font-size: 14px; font-weight: 700; }
+  .route-btn .r-time { font-size: 12px; color: var(--gray); margin-top: 2px; }
+  .route-btn .r-badge {
+    font-size: 11px; font-weight: 800;
+    padding: 3px 8px; border-radius: 999px;
+    background: #f3f4f6; color: #6b7280;
+    flex-shrink: 0; margin-left: 8px;
+  }
+  .route-btn .r-badge.a4000 { background: #fef3c7; color: #92400e; }
+  .route-btn .r-badge.a5000 { background: #dcfce7; color: #166534; }
+  .route-btn.selected {
+    border-color: var(--blue2);
+    background: #eef2ff;
+  }
+  .route-btn.selected .r-name::before { content: "✅ "; }
+  .route-btn.used { opacity: .45; }
+
+  /* ── 選択中チップ ── */
+  .sel-box {
+    background: #eef2ff;
+    border-radius: 12px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    min-height: 44px;
+  }
+  .sel-box .empty-note { font-size: 12px; color: #9ca3af; padding-top: 4px; }
+  .chip {
+    display: inline-flex; align-items: center;
+    background: var(--blue2); color: #fff;
+    font-size: 12px; font-weight: 700;
+    border-radius: 999px;
+    padding: 5px 10px;
+    margin: 3px 4px 3px 0;
+  }
+  .chip button {
+    background: none; border: none; color: #fff;
+    font-size: 14px; margin-left: 6px; padding: 0 2px;
+  }
+
+  /* ── ボタン ── */
+  .btn {
+    display: block; width: 100%;
+    padding: 14px;
+    border: none; border-radius: 14px;
+    font: inherit; font-size: 16px; font-weight: 800;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn-primary { background: var(--blue2); color: #fff; }
+  .btn-secondary { background: #e5e7eb; color: #374151; margin-top: 8px; }
+  .btn-sm {
+    width: auto; display: inline-block;
+    padding: 8px 14px; font-size: 13px; border-radius: 10px;
+  }
+  .btn-danger { background: #fee2e2; color: var(--red); }
+  .btn-edit { background: #e0e7ff; color: var(--blue2); margin-right: 6px; }
+
+  /* ── 臨時便 ── */
+  .rinji-toggle {
+    width: 100%;
+    padding: 12px;
+    border: 2px dashed #f59e0b;
+    border-radius: 12px;
+    background: #fffbeb;
+    color: #92400e;
+    font: inherit; font-size: 14px; font-weight: 700;
+    margin: 10px 0;
+  }
+  .rinji-form { display: none; background: #fffbeb; border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+  .rinji-form.open { display: block; }
+
+  /* ── 配車一覧 ── */
+  .assign-card {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.06);
+    padding: 14px;
+    margin-bottom: 12px;
+    border-left: 5px solid var(--blue2);
+  }
+  .assign-head { display: flex; align-items: center; justify-content: space-between; }
+  .assign-driver { font-size: 16px; font-weight: 800; }
+  .assign-car {
+    font-size: 12px; font-weight: 700;
+    background: #f3f4f6; color: #374151;
+    padding: 3px 10px; border-radius: 8px;
+  }
+  .assign-routes { margin-top: 8px; }
+  .assign-route-line {
+    display: flex; align-items: baseline;
+    font-size: 13px;
+    padding: 4px 0;
+    border-bottom: 1px dashed #f3f4f6;
+  }
+  .assign-route-line .num {
+    color: var(--blue2); font-weight: 800; margin-right: 6px; flex-shrink: 0;
+  }
+  .assign-route-line .t { color: var(--gray); font-size: 12px; margin-right: 8px; flex-shrink: 0; }
+  .assign-route-line .rinji-mark { color: var(--orange); font-size: 11px; font-weight: 800; margin-left: 4px; }
+  .assign-foot {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 10px;
+  }
+  .assign-foot .total { font-size: 12px; color: var(--gray); }
+
+  .day-summary {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
+    margin-bottom: 14px;
+  }
+  .stat {
+    background: #fff; border-radius: 12px; padding: 10px;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,.05);
+  }
+  .stat small { display: block; font-size: 10px; color: var(--gray); font-weight: 700; }
+  .stat strong { font-size: 16px; font-weight: 800; }
+
+  .empty {
+    text-align: center; color: #9ca3af;
+    font-size: 13px; padding: 30px 0;
+  }
+
+  /* ── 下部固定バー ── */
+  .bottom-bar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: rgba(255,255,255,.95);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid #e5e7eb;
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+    display: flex; gap: 8px;
+    z-index: 50;
+  }
+  .bottom-bar button { flex: 1; padding: 12px; font-size: 14px; }
+
+  .toast {
+    position: fixed; top: 70px; left: 50%;
+    transform: translateX(-50%) translateY(-20px);
+    background: #1f2937; color: #fff;
+    font-size: 13px; font-weight: 700;
+    padding: 10px 18px; border-radius: 999px;
+    opacity: 0; pointer-events: none;
+    transition: all .3s; z-index: 100;
+    white-space: nowrap;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🚌 配車入力（試験版）</h1>
+  <p>便をタップして選ぶだけ・データはこの端末に保存</p>
+</div>
+
+<div class="wrap">
+
+  <!-- 日付 -->
+  <div class="card">
+    <label class="lbl">📅 配車日</label>
+    <input type="date" id="fDate" />
+  </div>
+
+  <!-- 入力フォーム -->
+  <div class="card">
+    <h2 id="formTitle">➕ 配車を追加</h2>
+    <div class="row">
+      <div>
+        <label class="lbl">👤 ドライバー名</label>
+        <input type="text" id="fDriver" placeholder="例：山田" />
+      </div>
+      <div>
+        <label class="lbl">🚐 車両ナンバー（4桁）</label>
+        <input type="text" id="fCar" placeholder="例：1234" inputmode="numeric" maxlength="4" pattern="\d*" />
+      </div>
+    </div>
+
+    <label class="lbl">✅ 選択中の便（タップ順）</label>
+    <div class="sel-box" id="selBox"><div class="empty-note">下のリストから便をタップしてね</div></div>
+
+    <label class="lbl">🚏 便リスト（タップで選択・もう一度タップで解除）</label>
+    <div id="routeList"></div>
+
+    <button class="rinji-toggle" id="rinjiToggle">⚡ 臨時便・増便を追加する</button>
+    <div class="rinji-form" id="rinjiForm">
+      <div class="full">
+        <label class="lbl">便名</label>
+        <input type="text" id="rName" placeholder="例：福岡臨時下3" />
+      </div>
+      <div class="row">
+        <div>
+          <label class="lbl">開始</label>
+          <input type="time" id="rStart" />
+        </div>
+        <div>
+          <label class="lbl">終了</label>
+          <input type="time" id="rEnd" />
+        </div>
+      </div>
+      <button class="btn btn-primary" id="rinjiAdd" style="padding:10px;font-size:14px;">この臨時便を選択に追加</button>
+    </div>
+
+    <button class="btn btn-primary" id="saveBtn">💾 この配車を保存</button>
+    <button class="btn btn-secondary" id="clearBtn">入力をクリア</button>
+  </div>
+
+  <!-- 一覧 -->
+  <div class="day-summary">
+    <div class="stat"><small>配車数</small><strong id="sCount">0</strong></div>
+    <div class="stat"><small>便数合計</small><strong id="sRoutes">0</strong></div>
+    <div class="stat"><small>手当合計</small><strong id="sAllow">¥0</strong></div>
+  </div>
+
+  <h2 style="font-size:15px;font-weight:800;margin:4px 0 10px;">📋 この日の配車一覧</h2>
+  <div id="list"></div>
+
+</div>
+
+<div class="bottom-bar">
+  <button class="btn btn-primary" id="exportBtn">📤 JSON書き出し</button>
+  <button class="btn btn-secondary" id="resetDayBtn" style="margin-top:0;">この日をクリア</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const STORAGE_KEY = 'haisya_trial_v1';
+
+  // ── 便マスター（既存30便 + 手当）──────────────────
+  // allowance: 4000/5000はマスター指定、その他は3000
+  const ROUTE_MASTER = [
+    // 早朝（〜9時台出発）
+    { name:'筑紫下2補助',        start:'4:40',  end:'6:05',  allowance:4000, group:'morning' },
+    { name:'福岡南下補助1',      start:'5:10',  end:'6:40',  allowance:4000, group:'morning' },
+    { name:'福岡西下2',          start:'5:20',  end:'6:30',  allowance:4000, group:'morning' },
+    { name:'伊田下1',            start:'5:30',  end:'7:35',  allowance:4000, group:'morning' },
+    { name:'和白下1補助',        start:'5:40',  end:'7:15',  allowance:4000, group:'morning' },
+    { name:'福間下補助',         start:'5:45',  end:'7:45',  allowance:4000, group:'morning' },
+    { name:'城南下3上1',         start:'6:35',  end:'9:30',  allowance:4000, group:'morning' },
+    { name:'直方補助下1上1',     start:'8:40',  end:'10:50', allowance:3000, group:'morning' },
+    // 日中（11時〜15時前出発）
+    { name:'筑紫下2福南上1',     start:'11:30', end:'13:25', allowance:3000, group:'day' },
+    { name:'筑紫下3上2',         start:'12:00', end:'14:35', allowance:3000, group:'day' },
+    { name:'博多南下6上3',       start:'12:15', end:'13:45', allowance:3000, group:'day' },
+    { name:'行橋下2上1',         start:'12:25', end:'16:20', allowance:4000, group:'day' },
+    { name:'博多南下7上4',       start:'14:05', end:'15:35', allowance:3000, group:'day' },
+    { name:'筑紫野下補助',       start:'14:55', end:'16:45', allowance:3000, group:'day' },
+    // 夕方・夜（15時以降出発）
+    { name:'福岡下9上6',         start:'15:00', end:'16:45', allowance:3000, group:'evening' },
+    { name:'福西補助下上',       start:'15:20', end:'17:50', allowance:4000, group:'evening' },
+    { name:'前原下4上3',         start:'15:25', end:'19:00', allowance:3000, group:'evening' },
+    { name:'和白下補助3上補助①', start:'15:30', end:'18:30', allowance:3000, group:'evening' },
+    { name:'福岡東下4上1',       start:'15:35', end:'17:05', allowance:3000, group:'evening' },
+    { name:'宗像下5上4',         start:'16:10', end:'19:45', allowance:4000, group:'evening' },
+    { name:'福岡南下補助2上補助', start:'16:45', end:'18:10', allowance:3000, group:'evening' },
+    { name:'福岡上8',            start:'17:20', end:'18:50', allowance:3000, group:'evening' },
+    { name:'和白下補助3上補助②', start:'17:25', end:'18:30', allowance:3000, group:'evening' },
+    { name:'福岡中央下11上13',   start:'18:10', end:'20:10', allowance:3000, group:'evening' },
+    { name:'和白下5上4',         start:'18:35', end:'19:50', allowance:4000, group:'evening' },
+    { name:'博多南下回送上8',    start:'18:40', end:'20:20', allowance:3000, group:'evening' },
+    { name:'福岡東下補助上2',    start:'18:45', end:'19:40', allowance:3000, group:'evening' },
+    { name:'飯塚上3',            start:'18:45', end:'20:10', allowance:3000, group:'evening' },
+    { name:'博多北上9',          start:'19:10', end:'20:00', allowance:3000, group:'evening' },
+    { name:'福岡上14',           start:'19:45', end:'21:15', allowance:4000, group:'evening' },
+    // 参考：直方下3上2 は ¥5,000 便（現行プラン外だが臨時用に登録）
+    { name:'直方下3上2',         start:'',      end:'',      allowance:5000, group:'evening' },
+  ];
+
+  const $ = id => document.getElementById(id);
+  const uid = () => Math.random().toString(36).slice(2, 10);
+  const todayISO = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  };
+
+  // ── 状態 ─────────────────────────────────────────
+  // data = { "2026-06-11": [ {id, driver, car, routes:[{name,start,end,allowance,rinji}]} ] }
+  let data = load();
+  let selected = [];   // 選択中の便
+  let editingId = null;
+
+  function load() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
+    catch { return {}; }
+  }
+  function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
+  function dayItems() { return data[$('fDate').value] || []; }
+
+  // ── 便リスト描画 ──────────────────────────────────
+  function renderRoutes() {
+    const usedNames = new Set();
+    dayItems().forEach(item => {
+      if (item.id !== editingId) item.routes.forEach(r => usedNames.add(r.name));
+    });
+    const selNames = new Set(selected.map(r => r.name));
+
+    const groups = [
+      { key:'morning', label:'🌅 早朝便', cls:'g-morning' },
+      { key:'day',     label:'☀️ 日中便', cls:'g-day' },
+      { key:'evening', label:'🌆 夕方・夜便', cls:'g-evening' },
+    ];
+
+    $('routeList').innerHTML = groups.map(g => {
+      const btns = ROUTE_MASTER.filter(r => r.group === g.key).map(r => {
+        const sel  = selNames.has(r.name);
+        const used = usedNames.has(r.name);
+        const aCls = r.allowance >= 5000 ? 'a5000' : r.allowance >= 4000 ? 'a4000' : '';
+        const time = r.start ? `${r.start}〜${r.end}` : '時間自由';
+        return `<button class="route-btn ${sel?'selected':''} ${used&&!sel?'used':''}" onclick="toggleRoute('${r.name}')">
+          <span>
+            <span class="r-name">${r.name}</span><br>
+            <span class="r-time">${time}${used&&!sel?'　※配車済':''}</span>
+          </span>
+          <span class="r-badge ${aCls}">¥${r.allowance.toLocaleString()}</span>
+        </button>`;
+      }).join('');
+      return `<div class="group-title ${g.cls}">${g.label}</div>${btns}`;
+    }).join('');
+  }
+
+  window.toggleRoute = function(name) {
+    const i = selected.findIndex(r => r.name === name);
+    if (i >= 0) selected.splice(i, 1);
+    else {
+      const m = ROUTE_MASTER.find(r => r.name === name);
+      selected.push({ name:m.name, start:m.start, end:m.end, allowance:m.allowance, rinji:false });
+    }
+    renderSelected(); renderRoutes();
+  };
+
+  window.removeSel = function(i) {
+    selected.splice(i, 1);
+    renderSelected(); renderRoutes();
+  };
+
+  function renderSelected() {
+    if (!selected.length) {
+      $('selBox').innerHTML = '<div class="empty-note">下のリストから便をタップしてね</div>';
+      return;
+    }
+    $('selBox').innerHTML = selected.map((r,i) =>
+      `<span class="chip">${r.rinji?'⚡':''}${r.name}<button onclick="removeSel(${i})">✕</button></span>`
+    ).join('');
+  }
+
+  // ── 臨時便 ─────────────────────────────────────────
+  $('rinjiToggle').onclick = () => $('rinjiForm').classList.toggle('open');
+  $('rinjiAdd').onclick = () => {
+    const name = $('rName').value.trim();
+    if (!name) { toast('臨時便の便名を入れてね'); return; }
+    selected.push({
+      name, start: $('rStart').value, end: $('rEnd').value,
+      allowance: 3000, rinji: true
+    });
+    $('rName').value = ''; $('rStart').value = ''; $('rEnd').value = '';
+    $('rinjiForm').classList.remove('open');
+    renderSelected();
+    toast('⚡ 臨時便を追加したよ');
+  };
+
+  // ── 保存 ─────────────────────────────────────────
+  $('saveBtn').onclick = () => {
+    const driver = $('fDriver').value.trim();
+    const car    = $('fCar').value.trim();
+    if (!driver)          { toast('ドライバー名を入れてね'); return; }
+    if (!selected.length) { toast('便を1つ以上選んでね');   return; }
+    if (car && !/^\d{1,4}$/.test(car)) { toast('車両ナンバーは数字4桁までだよ'); return; }
+
+    const date = $('fDate').value;
+    if (!data[date]) data[date] = [];
+
+    // 出発時刻順に並べ替え（時間なし臨時便は末尾）
+    const sorted = [...selected].sort((a,b) => (a.start||'99') < (b.start||'99') ? -1 : 1);
+
+    if (editingId) {
+      const idx = data[date].findIndex(x => x.id === editingId);
+      if (idx >= 0) data[date][idx] = { id: editingId, driver, car, routes: sorted };
+      toast('✏️ 配車を更新したよ');
+    } else {
+      data[date].push({ id: uid(), driver, car, routes: sorted });
+      toast('💾 配車を保存したよ');
+    }
+    save(); clearForm(); renderAll();
+  };
+
+  function clearForm() {
+    editingId = null;
+    $('formTitle').textContent = '➕ 配車を追加';
+    $('fDriver').value = '';
+    $('fCar').value = '';
+    selected = [];
+    renderSelected(); renderRoutes();
+  }
+  $('clearBtn').onclick = clearForm;
+
+  // ── 一覧 ─────────────────────────────────────────
+  function renderList() {
+    const items = dayItems();
+    if (!items.length) {
+      $('list').innerHTML = '<div class="empty">この日の配車はまだないよ</div>';
+      return;
+    }
+    $('list').innerHTML = items.map(item => {
+      const total = item.routes.reduce((s,r) => s + (r.allowance||0), 0);
+      const lines = item.routes.map((r,i) => {
+        const t = r.start ? `${r.start}〜${r.end}` : '時間未定';
+        return `<div class="assign-route-line">
+          <span class="num">${'①②③④⑤⑥⑦⑧'[i]||'・'}</span>
+          <span class="t">${t}</span>
+          <span>${r.name}${r.rinji?'<span class="rinji-mark">⚡臨時</span>':''}</span>
+        </div>`;
+      }).join('');
+      return `<div class="assign-card">
+        <div class="assign-head">
+          <span class="assign-driver">👤 ${esc(item.driver)}</span>
+          ${item.car ? `<span class="assign-car">🚐 ${esc(item.car)}</span>` : ''}
+        </div>
+        <div class="assign-routes">${lines}</div>
+        <div class="assign-foot">
+          <span class="total">${item.routes.length}便 ／ 手当 ¥${total.toLocaleString()}</span>
+          <span>
+            <button class="btn btn-sm btn-edit" onclick="editItem('${item.id}')">編集</button>
+            <button class="btn btn-sm btn-danger" onclick="delItem('${item.id}')">削除</button>
+          </span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderSummary() {
+    const items = dayItems();
+    $('sCount').textContent  = items.length;
+    $('sRoutes').textContent = items.reduce((s,i) => s + i.routes.length, 0);
+    const total = items.reduce((s,i) => s + i.routes.reduce((a,r) => a + (r.allowance||0), 0), 0);
+    $('sAllow').textContent  = '¥' + total.toLocaleString();
+  }
+
+  function renderAll() { renderRoutes(); renderList(); renderSummary(); }
+
+  window.editItem = function(id) {
+    const item = dayItems().find(x => x.id === id);
+    if (!item) return;
+    editingId = id;
+    $('formTitle').textContent = `✏️ 編集：${item.driver}`;
+    $('fDriver').value = item.driver;
+    $('fCar').value = item.car || '';
+    selected = item.routes.map(r => ({...r}));
+    renderSelected(); renderRoutes();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  window.delItem = function(id) {
+    if (!confirm('この配車を削除する？')) return;
+    const date = $('fDate').value;
+    data[date] = (data[date]||[]).filter(x => x.id !== id);
+    save(); renderAll();
+    toast('🗑 削除したよ');
+  };
+
+  $('resetDayBtn').onclick = () => {
+    if (!confirm('この日の配車を全部消す？（元に戻せないよ）')) return;
+    delete data[$('fDate').value];
+    save(); clearForm(); renderAll();
+    toast('この日をクリアしたよ');
+  };
+
+  // ── JSON書き出し ──────────────────────────────────
+  $('exportBtn').onclick = () => {
+    const json = JSON.stringify(data, null, 2);
+    if (navigator.share) {
+      const file = new File([json], `haisya_data_${todayISO()}.json`, { type:'application/json' });
+      navigator.share({ files:[file], title:'配車データ' }).catch(() => copyJson(json));
+    } else copyJson(json);
+  };
+  function copyJson(json) {
+    navigator.clipboard.writeText(json)
+      .then(() => toast('📋 JSONをコピーしたよ！クロエに貼り付けてね'))
+      .catch(() => alert(json));
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function toast(msg) {
+    const t = $('toast');
+    t.textContent = msg; t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2500);
+  }
+
+  // ── 起動 ─────────────────────────────────────────
+  $('fDate').value = todayISO();
+  $('fDate').addEventListener('change', () => { clearForm(); renderAll(); });
+  renderAll();
+</script>
+</body>
+</html>
