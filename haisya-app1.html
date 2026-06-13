@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="配車入力" />
+<!-- 更新が反映されやすいようキャッシュ抑制 -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="0" />
+<!-- ホーム画面アイコン -->
+<link rel="apple-touch-icon" href="haisya-icon.png" />
+<link rel="icon" href="haisya-icon.png" />
 <title>配車入力（試験版）</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -32,6 +40,7 @@
   }
   .header h1 { font-size: 17px; font-weight: 800; }
   .header p { font-size: 11px; opacity: .75; margin-top: 2px; }
+  .header .ver { position: absolute; top: 10px; right: 14px; font-size: 10px; opacity: .6; }
 
   .wrap { padding: 14px; max-width: 560px; margin: 0 auto; }
 
@@ -118,6 +127,13 @@
     padding: 5px 10px;
     margin: 3px 4px 3px 0;
   }
+  .chip.rinji { background: var(--orange); }
+  .chip .amt {
+    background: rgba(255,255,255,.25);
+    border-radius: 999px;
+    padding: 1px 7px; margin-left: 6px;
+    font-size: 11px;
+  }
   .chip button {
     background: none; border: none; color: #fff;
     font-size: 14px; margin-left: 6px; padding: 0 2px;
@@ -154,8 +170,8 @@
   .rinji-form { display: none; background: #fffbeb; border-radius: 12px; padding: 12px; margin-bottom: 12px; }
   .rinji-form.open { display: block; }
 
-  /* ── 配車一覧 ── */
-  .assign-card {
+  /* ── 配車一覧（ドライバー単位） ── */
+  .driver-group {
     background: #fff;
     border-radius: 16px;
     box-shadow: 0 2px 10px rgba(0,0,0,.06);
@@ -163,30 +179,33 @@
     margin-bottom: 12px;
     border-left: 5px solid var(--blue2);
   }
-  .assign-head { display: flex; align-items: center; justify-content: space-between; }
-  .assign-driver { font-size: 16px; font-weight: 800; }
+  .driver-top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px; }
+  .driver-name { font-size: 17px; font-weight: 800; }
+  .driver-bind {
+    font-size: 12px; font-weight: 700; color: #166534;
+    background: #dcfce7; border-radius: 8px;
+    padding: 3px 9px; margin-top: 6px; display: inline-block;
+  }
+  .driver-total { font-size: 13px; font-weight: 800; color: var(--green); }
+
+  .assign-sub { margin-top: 10px; padding-top: 8px; border-top: 1px solid #f3f4f6; }
+  .assign-sub:first-of-type { border-top: none; }
+  .assign-sub-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
   .assign-car {
-    font-size: 12px; font-weight: 700;
-    background: #f3f4f6; color: #374151;
+    font-size: 12px; font-weight: 800;
+    background: #eef2ff; color: var(--blue2);
     padding: 3px 10px; border-radius: 8px;
   }
-  .assign-routes { margin-top: 8px; }
   .assign-route-line {
     display: flex; align-items: baseline;
     font-size: 13px;
     padding: 4px 0;
     border-bottom: 1px dashed #f3f4f6;
   }
-  .assign-route-line .num {
-    color: var(--blue2); font-weight: 800; margin-right: 6px; flex-shrink: 0;
-  }
+  .assign-route-line .num { color: var(--blue2); font-weight: 800; margin-right: 6px; flex-shrink: 0; }
   .assign-route-line .t { color: var(--gray); font-size: 12px; margin-right: 8px; flex-shrink: 0; }
   .assign-route-line .rinji-mark { color: var(--orange); font-size: 11px; font-weight: 800; margin-left: 4px; }
-  .assign-foot {
-    display: flex; justify-content: space-between; align-items: center;
-    margin-top: 10px;
-  }
-  .assign-foot .total { font-size: 12px; color: var(--gray); }
+  .assign-actions { margin-top: 6px; text-align: right; }
 
   .day-summary {
     display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
@@ -200,10 +219,7 @@
   .stat small { display: block; font-size: 10px; color: var(--gray); font-weight: 700; }
   .stat strong { font-size: 16px; font-weight: 800; }
 
-  .empty {
-    text-align: center; color: #9ca3af;
-    font-size: 13px; padding: 30px 0;
-  }
+  .empty { text-align: center; color: #9ca3af; font-size: 13px; padding: 30px 0; }
 
   /* ── 下部固定バー ── */
   .bottom-bar {
@@ -233,6 +249,7 @@
 <body>
 
 <div class="header">
+  <span class="ver" id="verLabel">v1.1</span>
   <h1>🚌 配車入力（試験版）</h1>
   <p>便をタップして選ぶだけ・データはこの端末に保存</p>
 </div>
@@ -251,15 +268,17 @@
     <div class="row">
       <div>
         <label class="lbl">👤 ドライバー名</label>
-        <input type="text" id="fDriver" placeholder="例：山田" />
+        <input type="text" id="fDriver" placeholder="例：山田" list="driverList" autocomplete="off" />
+        <datalist id="driverList"></datalist>
       </div>
       <div>
-        <label class="lbl">🚐 車両ナンバー（4桁）</label>
-        <input type="text" id="fCar" placeholder="例：1234" inputmode="numeric" maxlength="4" pattern="\d*" />
+        <label class="lbl">🚐 車両ナンバー</label>
+        <input type="text" id="fCar" placeholder="例：1234" inputmode="numeric" maxlength="4" pattern="\d*" list="carList" autocomplete="off" />
+        <datalist id="carList"></datalist>
       </div>
     </div>
 
-    <label class="lbl">✅ 選択中の便（タップ順）</label>
+    <label class="lbl">✅ 選択中の便（タップ順／⚡臨時は金額タップで修正）</label>
     <div class="sel-box" id="selBox"><div class="empty-note">下のリストから便をタップしてね</div></div>
 
     <label class="lbl">🚏 便リスト（タップで選択・もう一度タップで解除）</label>
@@ -295,7 +314,7 @@
 
   <!-- 一覧 -->
   <div class="day-summary">
-    <div class="stat"><small>配車数</small><strong id="sCount">0</strong></div>
+    <div class="stat"><small>ドライバー数</small><strong id="sCount">0</strong></div>
     <div class="stat"><small>便数合計</small><strong id="sRoutes">0</strong></div>
     <div class="stat"><small>手当合計</small><strong id="sAllow">¥0</strong></div>
   </div>
@@ -315,12 +334,13 @@
 <div class="toast" id="toast"></div>
 
 <script>
+  const APP_VERSION = '1.1';
   const STORAGE_KEY = 'haisya_trial_v1';
+  const CUSTOM_KEY  = 'haisya_custom_routes_v1';
 
-  // ── 便マスター（既存30便 + 手当）──────────────────
-  // allowance: 4000/5000はマスター指定、その他は3000
+  // ── 便マスター（規定便・手当は固定）──────────────────
   const ROUTE_MASTER = [
-    // 早朝（〜9時台出発）
+    // 早朝
     { name:'筑紫下2補助',        start:'4:40',  end:'6:05',  allowance:4000, group:'morning' },
     { name:'福岡南下補助1',      start:'5:10',  end:'6:40',  allowance:4000, group:'morning' },
     { name:'福岡西下2',          start:'5:20',  end:'6:30',  allowance:4000, group:'morning' },
@@ -329,14 +349,14 @@
     { name:'福間下補助',         start:'5:45',  end:'7:45',  allowance:4000, group:'morning' },
     { name:'城南下3上1',         start:'6:35',  end:'9:30',  allowance:4000, group:'morning' },
     { name:'直方補助下1上1',     start:'8:40',  end:'10:50', allowance:3000, group:'morning' },
-    // 日中（11時〜15時前出発）
+    // 日中
     { name:'筑紫下2福南上1',     start:'11:30', end:'13:25', allowance:3000, group:'day' },
     { name:'筑紫下3上2',         start:'12:00', end:'14:35', allowance:3000, group:'day' },
     { name:'博多南下6上3',       start:'12:15', end:'13:45', allowance:3000, group:'day' },
     { name:'行橋下2上1',         start:'12:25', end:'16:20', allowance:4000, group:'day' },
     { name:'博多南下7上4',       start:'14:05', end:'15:35', allowance:3000, group:'day' },
     { name:'筑紫野下補助',       start:'14:55', end:'16:45', allowance:3000, group:'day' },
-    // 夕方・夜（15時以降出発）
+    // 夕方・夜
     { name:'福岡下9上6',         start:'15:00', end:'16:45', allowance:3000, group:'evening' },
     { name:'福西補助下上',       start:'15:20', end:'17:50', allowance:4000, group:'evening' },
     { name:'前原下6上3',         start:'15:25', end:'19:00', allowance:3000, group:'evening' },
@@ -353,32 +373,33 @@
     { name:'飯塚上3',            start:'18:45', end:'20:10', allowance:3000, group:'evening' },
     { name:'博多北上9',          start:'19:10', end:'20:00', allowance:3000, group:'evening' },
     { name:'福岡上14',           start:'19:45', end:'21:15', allowance:4000, group:'evening' },
-    // 参考：直方下3上2 は ¥5,000 便（現行プラン外だが臨時用に登録）
     { name:'直方下3上2',         start:'',      end:'',      allowance:5000, group:'evening' },
   ];
+  const MASTER_NAMES = new Set(ROUTE_MASTER.map(r => r.name));
+
+  // ── ドライバー・車両DB（実績データから学習）──────────
+  const DRIVER_SEED = ['本村','坂田','川原','後藤','辻','中村','藤','安河内','高瀬','清原','尾畑','取渕','久野','池田奥','日高','大石','酒井','古賀','新川','佐伯','宮本','百田'];
+  const CAR_SEED = ['79','1143','2502','2793','3409','3433','4625','4786','5025','7688','8288','9094','9660'];
 
   const $ = id => document.getElementById(id);
   const uid = () => Math.random().toString(36).slice(2, 10);
-  // 時刻→分（"5:10"→310）時間なしは末尾扱い
   const toMin = t => {
     if (!t) return 9999;
     const [h, m] = String(t).split(':').map(Number);
     return (h || 0) * 60 + (m || 0);
   };
+  const fmtMin = m => `${Math.floor(m/60)}:${String(m%60).padStart(2,'0')}`;
   const todayISO = () => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   };
 
   // ── 状態 ─────────────────────────────────────────
-  // data = { "2026-06-11": [ {id, driver, car, routes:[{name,start,end,allowance,rinji}]} ] }
   let data = load();
-  let selected = [];   // 選択中の便
+  let customRoutes = loadCustom();
+  let selected = [];
   let editingId = null;
 
-  // ── 臨時便マスター（登録すると次回から選べる）──────
-  const CUSTOM_KEY = 'haisya_custom_routes_v1';
-  let customRoutes = loadCustom();
   function loadCustom() {
     try { return JSON.parse(localStorage.getItem(CUSTOM_KEY)) || []; }
     catch { return []; }
@@ -388,7 +409,6 @@
   function load() {
     try {
       const d = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
-      // 旧便名の自動修正（前原下4上3 → 前原下6上3）
       Object.values(d).forEach(items => items.forEach(item =>
         item.routes.forEach(r => { if (r.name === '前原下4上3') r.name = '前原下6上3'; })
       ));
@@ -398,6 +418,20 @@
   }
   function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
   function dayItems() { return data[$('fDate').value] || []; }
+
+  // ── ドライバー・車両リスト（datalist）──────────────
+  function renderDataLists() {
+    const drivers = new Set(DRIVER_SEED);
+    const cars = new Set(CAR_SEED);
+    Object.values(data).forEach(items => items.forEach(it => {
+      if (it.driver) drivers.add(it.driver);
+      if (it.car) cars.add(it.car);
+    }));
+    $('driverList').innerHTML = [...drivers].sort((a,b)=>a.localeCompare(b,'ja'))
+      .map(d => `<option value="${esc(d)}">`).join('');
+    $('carList').innerHTML = [...cars].sort((a,b)=>Number(a)-Number(b))
+      .map(c => `<option value="${esc(c)}">`).join('');
+  }
 
   // ── 便リスト描画 ──────────────────────────────────
   function renderRoutes() {
@@ -418,8 +452,8 @@
       const used = usedNames.has(r.name);
       const aCls = r.allowance >= 5000 ? 'a5000' : r.allowance >= 4000 ? 'a4000' : '';
       const time = r.start ? `${r.start}〜${r.end}` : '時間自由';
-      const del  = isCustom ? `<span onclick="event.stopPropagation();delCustom('${r.name}')" style="font-size:12px;color:#9ca3af;padding:4px 6px;">✕削除</span>` : '';
-      return `<div class="route-btn ${sel?'selected':''} ${used&&!sel?'used':''}" onclick="toggleRoute('${r.name}')">
+      const del  = isCustom ? `<span onclick="event.stopPropagation();delCustom('${esc(r.name)}')" style="font-size:12px;color:#9ca3af;padding:4px 6px;">✕削除</span>` : '';
+      return `<div class="route-btn ${sel?'selected':''} ${used&&!sel?'used':''}" onclick="toggleRoute('${esc(r.name)}')">
         <span>
           <span class="r-name">${esc(r.name)}</span><br>
           <span class="r-time">${time}${used&&!sel?'　※配車済':''}</span>
@@ -433,7 +467,6 @@
       return `<div class="group-title ${g.cls}">${g.label}</div>${btns}`;
     }).join('');
 
-    // ⚡臨時・増便（登録済みカスタム便）
     if (customRoutes.length) {
       html += `<div class="group-title" style="background:#f97316;">⚡ 臨時・増便（登録済み）</div>` +
         customRoutes.map(r => btnHtml(r, true)).join('');
@@ -447,7 +480,7 @@
     else {
       const m = ROUTE_MASTER.find(r => r.name === name) || customRoutes.find(r => r.name === name);
       if (!m) return;
-      const rinji = !ROUTE_MASTER.some(r => r.name === name);
+      const rinji = !MASTER_NAMES.has(name);
       selected.push({ name:m.name, start:m.start, end:m.end, allowance:m.allowance, rinji });
     }
     renderSelected(); renderRoutes();
@@ -465,29 +498,48 @@
     renderSelected(); renderRoutes();
   };
 
+  // 臨時便のみ金額修正（規定便は不可）
+  window.editSelAllow = function(i) {
+    const r = selected[i];
+    if (!r.rinji) { toast('規定便の金額は固定だよ'); return; }
+    const cur = r.allowance;
+    const v = prompt(`「${r.name}」の手当金額（円）`, cur);
+    if (v === null) return;
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0) { toast('数字で入れてね'); return; }
+    r.allowance = n;
+    // 臨時便マスターの金額も更新
+    const cm = customRoutes.find(c => c.name === r.name);
+    if (cm) { cm.allowance = n; saveCustom(); }
+    renderSelected(); renderRoutes();
+    toast('💴 金額を修正したよ');
+  };
+
   function renderSelected() {
     if (!selected.length) {
       $('selBox').innerHTML = '<div class="empty-note">下のリストから便をタップしてね</div>';
       return;
     }
-    $('selBox').innerHTML = selected.map((r,i) =>
-      `<span class="chip">${r.rinji?'⚡':''}${r.name}<button onclick="removeSel(${i})">✕</button></span>`
-    ).join('');
+    $('selBox').innerHTML = selected.map((r,i) => {
+      const amt = r.rinji
+        ? `<span class="amt" onclick="event.stopPropagation();editSelAllow(${i})">¥${r.allowance.toLocaleString()} ✏️</span>`
+        : '';
+      return `<span class="chip ${r.rinji?'rinji':''}">${r.rinji?'⚡':''}${esc(r.name)}${amt}<button onclick="removeSel(${i})">✕</button></span>`;
+    }).join('');
   }
 
-  // ── 臨時便 ─────────────────────────────────────────
+  // ── 臨時便フォーム ─────────────────────────────────
   $('rinjiToggle').onclick = () => $('rinjiForm').classList.toggle('open');
   $('rinjiAdd').onclick = () => {
     const name = $('rName').value.trim();
     if (!name) { toast('臨時便の便名を入れてね'); return; }
-    if (ROUTE_MASTER.some(r => r.name === name) || customRoutes.some(r => r.name === name)) {
+    if (MASTER_NAMES.has(name) || customRoutes.some(r => r.name === name)) {
       toast('同じ便名がもうあるよ。リストから選んでね'); return;
     }
     const route = {
       name, start: $('rStart').value, end: $('rEnd').value,
       allowance: Number($('rAllow').value) || 3000
     };
-    // 臨時便マスターに登録（次回からタップで選べる）
     customRoutes.push(route);
     saveCustom();
     selected.push({ ...route, rinji: true });
@@ -508,7 +560,6 @@
     const date = $('fDate').value;
     if (!data[date]) data[date] = [];
 
-    // 出発時刻順に並べ替え（時間なし臨時便は末尾）
     const sorted = [...selected].sort((a,b) => toMin(a.start) - toMin(b.start));
 
     if (editingId) {
@@ -532,51 +583,89 @@
   }
   $('clearBtn').onclick = clearForm;
 
-  // ── 一覧 ─────────────────────────────────────────
+  // ── 一覧（ドライバー単位でまとめる）────────────────
   function renderList() {
     const items = dayItems();
     if (!items.length) {
       $('list').innerHTML = '<div class="empty">この日の配車はまだないよ</div>';
       return;
     }
-    $('list').innerHTML = items.map(item => {
-      // 表示時も常に時刻順に並べる（過去データの並び修正も兼ねる）
-      const routes = [...item.routes].sort((a,b) => toMin(a.start) - toMin(b.start));
-      const total = routes.reduce((s,r) => s + (r.allowance||0), 0);
-      const lines = routes.map((r,i) => {
-        const t = r.start ? `${r.start}〜${r.end}` : '時間未定';
-        return `<div class="assign-route-line">
-          <span class="num">${'①②③④⑤⑥⑦⑧'[i]||'・'}</span>
-          <span class="t">${t}</span>
-          <span>${r.name}${r.rinji?'<span class="rinji-mark">⚡臨時</span>':''}</span>
+
+    // ドライバー名でグループ化
+    const groups = {};
+    items.forEach(it => { (groups[it.driver] = groups[it.driver] || []).push(it); });
+
+    const arr = Object.entries(groups).map(([driver, its]) => {
+      const allRoutes = its.flatMap(i => i.routes);
+      const starts = allRoutes.map(r => toMin(r.start)).filter(m => m < 9999);
+      const ends   = allRoutes.map(r => toMin(r.end)).filter(m => m > 0 && m < 9999);
+      const minS = starts.length ? Math.min(...starts) : null;
+      const maxE = ends.length   ? Math.max(...ends)   : null;
+      const total = allRoutes.reduce((s,r) => s + (r.allowance||0), 0);
+      return { driver, its, minS, maxE, total, count: allRoutes.length };
+    });
+    arr.sort((a,b) => (a.minS ?? 9999) - (b.minS ?? 9999));
+
+    $('list').innerHTML = arr.map(g => {
+      // 拘束時間
+      let bind = '';
+      if (g.minS != null && g.maxE != null) {
+        const dur = g.maxE - g.minS;
+        bind = `<span class="driver-bind">⏱ 拘束 ${fmtMin(g.minS)}〜${fmtMin(g.maxE)}（${Math.floor(dur/60)}時間${String(dur%60).padStart(2,'0')}分）</span>`;
+      }
+
+      // 各配車（車両ごと）— 早い順
+      const blocks = [...g.its].sort((a,b) => {
+        const am = Math.min(...a.routes.map(r=>toMin(r.start)));
+        const bm = Math.min(...b.routes.map(r=>toMin(r.start)));
+        return am - bm;
+      }).map(it => {
+        const routes = [...it.routes].sort((a,b) => toMin(a.start) - toMin(b.start));
+        const lines = routes.map((r,i) => {
+          const t = r.start ? `${r.start}〜${r.end}` : '時間未定';
+          return `<div class="assign-route-line">
+            <span class="num">${'①②③④⑤⑥⑦⑧'[i]||'・'}</span>
+            <span class="t">${t}</span>
+            <span>${esc(r.name)}${r.rinji?'<span class="rinji-mark">⚡臨時</span>':''}</span>
+          </div>`;
+        }).join('');
+        const carLabel = it.car ? `🚐 ${esc(it.car)}` : '🚐 車両未設定';
+        return `<div class="assign-sub">
+          <div class="assign-sub-head">
+            <span class="assign-car">${carLabel}</span>
+            <span style="font-size:11px;color:var(--gray);">${it.routes.length}便</span>
+          </div>
+          ${lines}
+          <div class="assign-actions">
+            <button class="btn btn-sm btn-edit" onclick="editItem('${it.id}')">編集</button>
+            <button class="btn btn-sm btn-danger" onclick="delItem('${it.id}')">削除</button>
+          </div>
         </div>`;
       }).join('');
-      return `<div class="assign-card">
-        <div class="assign-head">
-          <span class="assign-driver">👤 ${esc(item.driver)}</span>
-          ${item.car ? `<span class="assign-car">🚐 ${esc(item.car)}</span>` : ''}
+
+      const carCount = g.its.length > 1 ? `<span style="font-size:11px;color:var(--orange);font-weight:700;">🔁 ${g.its.length}台乗継</span>` : '';
+
+      return `<div class="driver-group">
+        <div class="driver-top">
+          <span class="driver-name">👤 ${esc(g.driver)} ${carCount}</span>
+          <span class="driver-total">手当 ¥${g.total.toLocaleString()}</span>
         </div>
-        <div class="assign-routes">${lines}</div>
-        <div class="assign-foot">
-          <span class="total">${item.routes.length}便 ／ 手当 ¥${total.toLocaleString()}</span>
-          <span>
-            <button class="btn btn-sm btn-edit" onclick="editItem('${item.id}')">編集</button>
-            <button class="btn btn-sm btn-danger" onclick="delItem('${item.id}')">削除</button>
-          </span>
-        </div>
+        ${bind}
+        ${blocks}
       </div>`;
     }).join('');
   }
 
   function renderSummary() {
     const items = dayItems();
-    $('sCount').textContent  = items.length;
+    const drivers = new Set(items.map(i => i.driver));
+    $('sCount').textContent  = drivers.size;
     $('sRoutes').textContent = items.reduce((s,i) => s + i.routes.length, 0);
     const total = items.reduce((s,i) => s + i.routes.reduce((a,r) => a + (r.allowance||0), 0), 0);
     $('sAllow').textContent  = '¥' + total.toLocaleString();
   }
 
-  function renderAll() { renderRoutes(); renderList(); renderSummary(); }
+  function renderAll() { renderDataLists(); renderRoutes(); renderList(); renderSummary(); }
 
   window.editItem = function(id) {
     const item = dayItems().find(x => x.id === id);
@@ -605,28 +694,26 @@
     toast('この日をクリアしたよ');
   };
 
-  // ── JSON書き出し ──────────────────────────────────
+  // ── JSON書き出し（固定ファイル名で上書き運用）──────
   $('exportBtn').onclick = () => {
     const payload = {
-      app: 'haisya-app1',
-      version: 2,
+      app: 'haisya-app1', version: 2,
       exported: new Date().toISOString(),
-      assignments: data,
-      customRoutes: customRoutes
+      assignments: data, customRoutes: customRoutes
     };
     const json = JSON.stringify(payload, null, 2);
     if (navigator.share) {
-      const file = new File([json], `haisya_data_${todayISO()}.json`, { type:'application/json' });
+      const file = new File([json], `配車データ_master.json`, { type:'application/json' });
       navigator.share({ files:[file], title:'配車データ' }).catch(() => copyJson(json));
     } else copyJson(json);
   };
   function copyJson(json) {
     navigator.clipboard.writeText(json)
-      .then(() => toast('📋 JSONをコピーしたよ！クロエに貼り付けてね'))
+      .then(() => toast('📋 コピーしたよ！クロエに貼り付けてね'))
       .catch(() => alert(json));
   }
 
-  // ── JSON読み込み（復元）───────────────────────────
+  // ── JSON読み込み ──────────────────────────────────
   $('importBtn').onclick = () => $('importFile').click();
   $('importFile').addEventListener('change', e => {
     const file = e.target.files[0];
@@ -637,23 +724,17 @@
         const obj = JSON.parse(reader.result);
         let importData, importCustom = [];
         if (obj.app === 'haisya-app1' && obj.assignments) {
-          // 新形式（version 2）
           importData = obj.assignments;
           importCustom = obj.customRoutes || [];
-        } else {
-          // 旧形式（日付がキーのオブジェクト）
-          importData = obj;
-        }
+        } else { importData = obj; }
         const dates = Object.keys(importData);
-        if (!confirm(`${dates.length}日分のデータを読み込むよ。\n同じ日付のデータは上書きされる。いい？`)) {
+        if (!confirm(`${dates.length}日分のデータを読み込むよ。\n同じ日付は上書きされる。いい？`)) {
           e.target.value = ''; return;
         }
-        // 日付単位でマージ（読み込んだ日付は上書き）
         Object.assign(data, importData);
         save();
-        // 臨時便マスターは名前重複を除いて追加
         importCustom.forEach(r => {
-          if (!customRoutes.some(c => c.name === r.name) && !ROUTE_MASTER.some(m => m.name === r.name)) {
+          if (!customRoutes.some(c => c.name === r.name) && !MASTER_NAMES.has(r.name)) {
             customRoutes.push(r);
           }
         });
@@ -671,7 +752,6 @@
   function esc(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
-
   function toast(msg) {
     const t = $('toast');
     t.textContent = msg; t.classList.add('show');
@@ -679,6 +759,7 @@
   }
 
   // ── 起動 ─────────────────────────────────────────
+  $('verLabel').textContent = 'v' + APP_VERSION;
   $('fDate').value = todayISO();
   $('fDate').addEventListener('change', () => { clearForm(); renderAll(); });
   renderAll();
