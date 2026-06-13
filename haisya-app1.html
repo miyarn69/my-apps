@@ -224,6 +224,28 @@
   .assign-route-line .rinji-mark { color: var(--orange); font-size: 11px; font-weight: 800; margin-left: 4px; }
   .assign-actions { margin-top: 6px; text-align: right; }
 
+  /* 最下部フッター（運行時間＋手当 横並び） */
+  .driver-foot {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 10px; padding-top: 9px;
+    border-top: 1.5px solid #eef2f7;
+  }
+  .run-time { font-size: 13px; font-weight: 700; color: #374151; }
+  .run-time b { color: var(--blue2); }
+
+  /* 重複警告 */
+  .driver-group.conflict { border-left-color: var(--red); }
+  .conflict-banner {
+    background: #fee2e2; color: var(--red);
+    font-size: 12px; font-weight: 800;
+    border-radius: 8px; padding: 7px 10px;
+    margin: 8px 0 4px;
+  }
+  .assign-route-line.conflict { background: #fff1f2; }
+  .assign-route-line.conflict .t,
+  .assign-route-line.conflict > span:last-child { color: var(--red); font-weight: 700; }
+  .assign-car.conflict { background: #fee2e2; color: var(--red); }
+
   .day-summary {
     display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
     margin-bottom: 14px;
@@ -266,7 +288,7 @@
 <body>
 
 <div class="header">
-  <span class="ver" id="verLabel">v1.2</span>
+  <span class="ver" id="verLabel">v1.3</span>
   <h1>🚌 配車入力（試験版）</h1>
   <p>便をタップして選ぶだけ・データはこの端末に保存</p>
 </div>
@@ -357,7 +379,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-  const APP_VERSION = '1.2';
+  const APP_VERSION = '1.3';
   const STORAGE_KEY = 'haisya_trial_v1';
   const CUSTOM_KEY  = 'haisya_custom_routes_v1';
 
@@ -595,15 +617,25 @@
 
     const sorted = [...selected].sort((a,b) => toMin(a.start) - toMin(b.start));
 
+    let savedId;
     if (editingId) {
+      savedId = editingId;
       const idx = data[date].findIndex(x => x.id === editingId);
       if (idx >= 0) data[date][idx] = { id: editingId, driver, car, routes: sorted };
       toast('✏️ 配車を更新したよ');
     } else {
-      data[date].push({ id: uid(), driver, car, routes: sorted });
+      savedId = uid();
+      data[date].push({ id: savedId, driver, car, routes: sorted });
       toast('💾 配車を保存したよ');
     }
     save(); clearForm(); renderAll();
+
+    // 保存した配車が重複していたら警告
+    const conf = detectDayConflicts(data[date] || []);
+    const savedItem = (data[date] || []).find(x => x.id === savedId);
+    if (savedItem && savedItem.routes.some(r => conf.has(r))) {
+      setTimeout(() => toast('⚠️ 時間または車両が重複してるよ！一覧を確認して'), 600);
+    }
   };
 
   function clearForm() {
@@ -616,6 +648,28 @@
   }
   $('clearBtn').onclick = clearForm;
 
+  // ── 重複検出（時間・車両）────────────────────────
+  // 戻り値: Map(routeオブジェクト -> Set('driver'|'car'))
+  function detectDayConflicts(items) {
+    const flat = [];
+    items.forEach(it => it.routes.forEach(r => {
+      const s = toMin(r.start), e = toMin(r.end);
+      if (s < 9999 && e < 9999 && e > s) flat.push({ it, r, s, e });
+    }));
+    const map = new Map();
+    const add = (r, type) => { if (!map.has(r)) map.set(r, new Set()); map.get(r).add(type); };
+    for (let i = 0; i < flat.length; i++) {
+      for (let j = i + 1; j < flat.length; j++) {
+        const a = flat[i], b = flat[j];
+        if (a.s < b.e && b.s < a.e) { // 時間が重なる
+          if (a.it.driver === b.it.driver) { add(a.r, 'driver'); add(b.r, 'driver'); }
+          if (a.it.car && a.it.car === b.it.car) { add(a.r, 'car'); add(b.r, 'car'); }
+        }
+      }
+    }
+    return map;
+  }
+
   // ── 一覧（ドライバー単位でまとめる）────────────────
   function renderList() {
     const items = dayItems();
@@ -624,27 +678,38 @@
       return;
     }
 
+    const conflicts = detectDayConflicts(items);
+
     // ドライバー名でグループ化
     const groups = {};
     items.forEach(it => { (groups[it.driver] = groups[it.driver] || []).push(it); });
 
     const arr = Object.entries(groups).map(([driver, its]) => {
       const allRoutes = its.flatMap(i => i.routes);
-      const starts = allRoutes.map(r => toMin(r.start)).filter(m => m < 9999);
-      const ends   = allRoutes.map(r => toMin(r.end)).filter(m => m > 0 && m < 9999);
-      const minS = starts.length ? Math.min(...starts) : null;
-      const maxE = ends.length   ? Math.max(...ends)   : null;
-      const total = allRoutes.reduce((s,r) => s + (r.allowance||0), 0);
-      return { driver, its, minS, maxE, total, count: allRoutes.length };
+      // 運行時間 = 各便（終了−開始）の合計
+      const runMin = allRoutes.reduce((s, r) => {
+        const st = toMin(r.start), en = toMin(r.end);
+        return (st < 9999 && en < 9999 && en > st) ? s + (en - st) : s;
+      }, 0);
+      const total = allRoutes.reduce((s, r) => s + (r.allowance||0), 0);
+      const minS = Math.min(...allRoutes.map(r => toMin(r.start)));
+      return { driver, its, runMin, total, minS };
     });
-    arr.sort((a,b) => (a.minS ?? 9999) - (b.minS ?? 9999));
+    arr.sort((a,b) => a.minS - b.minS);
 
     $('list').innerHTML = arr.map(g => {
-      // 拘束時間
-      let bind = '';
-      if (g.minS != null && g.maxE != null) {
-        const dur = g.maxE - g.minS;
-        bind = `<span class="driver-bind">⏱ 拘束 ${fmtMin(g.minS)}〜${fmtMin(g.maxE)}（${Math.floor(dur/60)}時間${String(dur%60).padStart(2,'0')}分）</span>`;
+      // この人の重複種別を集計
+      const types = new Set();
+      g.its.forEach(it => it.routes.forEach(r => {
+        if (conflicts.has(r)) conflicts.get(r).forEach(t => types.add(t));
+      }));
+      const hasConflict = types.size > 0;
+      let banner = '';
+      if (hasConflict) {
+        const msgs = [];
+        if (types.has('driver')) msgs.push('⏰ 運行時間が重複');
+        if (types.has('car'))    msgs.push('🚐 車両が他と重複');
+        banner = `<div class="conflict-banner">⚠️ ${msgs.join('　/　')}！確認してね</div>`;
       }
 
       // 各配車（車両ごと）— 早い順
@@ -654,18 +719,20 @@
         return am - bm;
       }).map(it => {
         const routes = [...it.routes].sort((a,b) => toMin(a.start) - toMin(b.start));
+        const carConflict = it.routes.some(r => conflicts.has(r) && conflicts.get(r).has('car'));
         const lines = routes.map((r,i) => {
           const t = r.start ? `${r.start}〜${r.end}` : '時間未定';
-          return `<div class="assign-route-line">
+          const cf = conflicts.has(r) ? 'conflict' : '';
+          return `<div class="assign-route-line ${cf}">
             <span class="num">${'①②③④⑤⑥⑦⑧'[i]||'・'}</span>
             <span class="t">${t}</span>
-            <span>${esc(r.name)}${r.rinji?'<span class="rinji-mark">⚡臨時</span>':''}</span>
+            <span>${esc(r.name)}${r.rinji?'<span class="rinji-mark">⚡臨時</span>':''}${cf?' ⚠️':''}</span>
           </div>`;
         }).join('');
         const carLabel = it.car ? `🚐 ${esc(it.car)}` : '🚐 車両未設定';
         return `<div class="assign-sub">
           <div class="assign-sub-head">
-            <span class="assign-car">${carLabel}</span>
+            <span class="assign-car ${carConflict?'conflict':''}">${carLabel}</span>
             <span style="font-size:11px;color:var(--gray);">${it.routes.length}便</span>
           </div>
           ${lines}
@@ -677,14 +744,20 @@
       }).join('');
 
       const carCount = g.its.length > 1 ? `<span style="font-size:11px;color:var(--orange);font-weight:700;">🔁 ${g.its.length}台乗継</span>` : '';
+      const runLabel = g.runMin > 0
+        ? `🚌 運行時間 <b>${Math.floor(g.runMin/60)}時間${String(g.runMin%60).padStart(2,'0')}分</b>`
+        : '🚌 運行時間 —';
 
-      return `<div class="driver-group">
+      return `<div class="driver-group ${hasConflict?'conflict':''}">
         <div class="driver-top">
           <span class="driver-name">👤 ${esc(g.driver)} ${carCount}</span>
+        </div>
+        ${banner}
+        ${blocks}
+        <div class="driver-foot">
+          <span class="run-time">${runLabel}</span>
           <span class="driver-total">手当 ¥${g.total.toLocaleString()}</span>
         </div>
-        ${bind}
-        ${blocks}
       </div>`;
     }).join('');
   }
