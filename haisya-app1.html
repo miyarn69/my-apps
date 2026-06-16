@@ -304,7 +304,7 @@
 <body>
 
 <div class="header">
-  <span class="ver" id="verLabel">v1.4</span>
+  <span class="ver" id="verLabel">v1.5</span>
   <h1>🚌 配車入力（試験版）</h1>
   <p>便をタップして選ぶだけ・データはこの端末に保存</p>
 </div>
@@ -398,7 +398,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-  const APP_VERSION = '1.4';
+  const APP_VERSION = '1.5';
   const STORAGE_KEY = 'haisya_trial_v1';
   const CUSTOM_KEY  = 'haisya_custom_routes_v1';
 
@@ -972,12 +972,24 @@
     const base = location.href.replace(/[^/]*(\?.*)?(#.*)?$/, '');
     return base + 'haisya-view.html#d=' + b64;
   }
-  $('shareViewBtn').onclick = () => {
+  // 長いURLを短縮（is.gd）。失敗したら元URLを返す
+  async function shortenURL(longUrl) {
+    try {
+      const res = await fetch('https://is.gd/create.php?format=json&url=' + encodeURIComponent(longUrl));
+      const j = await res.json();
+      return j.shorturl || longUrl;
+    } catch { return longUrl; }
+  }
+  $('shareViewBtn').onclick = async () => {
     if (!dayItems().length) { toast('この日の配車がまだないよ'); return; }
-    const url = buildViewURL();
+    const btn = $('shareViewBtn');
+    btn.disabled = true; btn.textContent = '🔗 リンクを準備中…';
+    const longUrl = buildViewURL();
+    const url = await shortenURL(longUrl);
+    btn.disabled = false; btn.textContent = '📲 ドライバー用ページを作成（LINE共有）';
+    const text = `🚌 ${$('fDate').value} の配車表`;
     if (navigator.share) {
-      navigator.share({ title:'配車表', text:`${$('fDate').value} の配車表`, url })
-        .catch(() => copyText(url));
+      navigator.share({ title:'配車表', text, url }).catch(() => copyText(url));
     } else copyText(url);
   };
   function copyText(t) {
