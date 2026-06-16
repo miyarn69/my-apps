@@ -113,10 +113,13 @@
 
   function decode() {
     try {
-      const hash = location.hash.slice(1);
-      const params = new URLSearchParams(hash);
-      const b64 = params.get('d');
+      // クエリ（?d=）優先・旧形式の #d= もフォールバックで対応
+      let b64 = new URLSearchParams(location.search).get('d');
+      if (!b64) b64 = new URLSearchParams(location.hash.slice(1)).get('d');
       if (!b64) return null;
+      // base64url を通常の base64 に戻す
+      b64 = b64.replace(/-/g,'+').replace(/_/g,'/');
+      while (b64.length % 4) b64 += '=';
       const json = decodeURIComponent(escape(atob(b64)));
       return JSON.parse(json);
     } catch { return null; }

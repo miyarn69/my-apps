@@ -304,7 +304,7 @@
 <body>
 
 <div class="header">
-  <span class="ver" id="verLabel">v1.5</span>
+  <span class="ver" id="verLabel">v1.6</span>
   <h1>🚌 配車入力（試験版）</h1>
   <p>便をタップして選ぶだけ・データはこの端末に保存</p>
 </div>
@@ -398,7 +398,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-  const APP_VERSION = '1.5';
+  const APP_VERSION = '1.6';
   const STORAGE_KEY = 'haisya_trial_v1';
   const CUSTOM_KEY  = 'haisya_custom_routes_v1';
 
@@ -968,9 +968,12 @@
       }))
     };
     const json = JSON.stringify(compact);
-    const b64 = btoa(unescape(encodeURIComponent(json))); // 日本語OKのbase64
+    // 日本語OK＆URLで壊れないbase64url（+/=を-_に変換）
+    const b64 = btoa(unescape(encodeURIComponent(json)))
+      .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
     const base = location.href.replace(/[^/]*(\?.*)?(#.*)?$/, '');
-    return base + 'haisya-view.html#d=' + b64;
+    // 短縮URLでも消えないようクエリ（?）で渡す
+    return base + 'haisya-view.html?d=' + b64;
   }
   // 長いURLを短縮（is.gd）。失敗したら元URLを返す
   async function shortenURL(longUrl) {
