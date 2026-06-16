@@ -304,7 +304,7 @@
 <body>
 
 <div class="header">
-  <span class="ver" id="verLabel">v1.6</span>
+  <span class="ver" id="verLabel">v1.7</span>
   <h1>🚌 配車入力（試験版）</h1>
   <p>便をタップして選ぶだけ・データはこの端末に保存</p>
 </div>
@@ -398,7 +398,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-  const APP_VERSION = '1.6';
+  const APP_VERSION = '1.7';
   const STORAGE_KEY = 'haisya_trial_v1';
   const CUSTOM_KEY  = 'haisya_custom_routes_v1';
 
@@ -955,45 +955,36 @@
   });
 
   // ── ドライバー用ページのURLを生成して共有 ──────────
+  // 規定便は番号だけ・臨時便のみ[名前,開始,終了]で送りURLを短く保つ
   function buildViewURL() {
     const items = dayItems();
-    const date = $('fDate').value;
-    // 手当は含めない・コンパクトな形式に圧縮
-    const compact = {
-      d: date,
-      a: items.map(it => ({
-        n: it.driver,
-        c: it.car || '',
-        r: [...it.routes].sort((x,y)=>toMin(x.start)-toMin(y.start)).map(r => [r.name, r.start, r.end])
-      }))
-    };
+    const idxOf = {};
+    ROUTE_MASTER.forEach((r, i) => { idxOf[r.name] = i; });
+    const a = items.map(it => ({
+      n: it.driver,
+      c: it.car || '',
+      r: [...it.routes].sort((x,y)=>toMin(x.start)-toMin(y.start)).map(r => {
+        const i = idxOf[r.name];
+        return (i !== undefined) ? i : [r.name, r.start, r.end];
+      })
+    }));
+    const compact = { v: 1, d: $('fDate').value, a };
     const json = JSON.stringify(compact);
-    // 日本語OK＆URLで壊れないbase64url（+/=を-_に変換）
     const b64 = btoa(unescape(encodeURIComponent(json)))
       .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
     const base = location.href.replace(/[^/]*(\?.*)?(#.*)?$/, '');
-    // 短縮URLでも消えないようクエリ（?）で渡す
     return base + 'haisya-view.html?d=' + b64;
   }
-  // 長いURLを短縮（is.gd）。失敗したら元URLを返す
-  async function shortenURL(longUrl) {
-    try {
-      const res = await fetch('https://is.gd/create.php?format=json&url=' + encodeURIComponent(longUrl));
-      const j = await res.json();
-      return j.shorturl || longUrl;
-    } catch { return longUrl; }
-  }
-  $('shareViewBtn').onclick = async () => {
+  // ★タップ直後に同期実行（iOSのLINE共有が動く条件）
+  $('shareViewBtn').onclick = () => {
     if (!dayItems().length) { toast('この日の配車がまだないよ'); return; }
-    const btn = $('shareViewBtn');
-    btn.disabled = true; btn.textContent = '🔗 リンクを準備中…';
-    const longUrl = buildViewURL();
-    const url = await shortenURL(longUrl);
-    btn.disabled = false; btn.textContent = '📲 ドライバー用ページを作成（LINE共有）';
+    const url = buildViewURL();
     const text = `🚌 ${$('fDate').value} の配車表`;
     if (navigator.share) {
-      navigator.share({ title:'配車表', text, url }).catch(() => copyText(url));
-    } else copyText(url);
+      navigator.share({ title:'配車表', text, url }).catch(() => {});
+    } else {
+      copyText(url);
+    }
   };
   function copyText(t) {
     navigator.clipboard.writeText(t)

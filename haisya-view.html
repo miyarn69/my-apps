@@ -125,6 +125,27 @@
     } catch { return null; }
   }
 
+  // 規定便カタログ（アプリ側 ROUTE_MASTER と同じ順番）[名前,開始,終了]
+  const MASTER = [
+    ["筑紫下2補助","4:40","6:05"],["福岡南下補助1","5:10","6:40"],["福岡西下2","5:20","6:30"],
+    ["伊田下1","5:30","7:35"],["和白下1補助","5:40","7:15"],["福間下補助","5:45","7:45"],
+    ["城南下3上1","6:35","9:30"],["直方補助下1上1","8:40","10:50"],["筑紫下2福南上1","11:30","13:25"],
+    ["筑紫下3上2","12:00","14:35"],["博多南下6上3","12:15","13:45"],["行橋下2上1","12:25","16:20"],
+    ["博多南下7上4","14:05","15:35"],["筑紫野下補助","14:55","16:45"],["福岡下9上6","15:00","16:45"],
+    ["福西補助下上","15:20","17:50"],["前原下6上3","15:25","19:00"],["和白下補助3上補助①","15:30","18:30"],
+    ["福岡東下4上1","15:35","17:05"],["宗像下5上4","16:10","19:45"],["福岡南下補助2上補助","16:45","18:10"],
+    ["福岡上8","17:20","18:50"],["和白下補助3上補助②","17:25","18:30"],["福岡中央下11上13","18:10","20:10"],
+    ["和白下5上4","18:35","19:50"],["博多南下回送上8","18:40","20:20"],["福岡東下補助上2","18:45","19:40"],
+    ["飯塚上3","18:45","20:10"],["博多北上9","19:10","20:00"],["福岡上14","19:45","21:15"],
+    ["直方下3上2","",""]
+  ];
+  // 1便分を {name,start,end} に展開（数値=規定便インデックス／配列=臨時便）
+  function expandRoute(x) {
+    if (Array.isArray(x)) return { name:x[0], start:x[1], end:x[2] };
+    const m = MASTER[x] || ["?","",""];
+    return { name:m[0], start:m[1], end:m[2] };
+  }
+
   const data = decode();
   if (!data || !data.a) {
     document.getElementById('empty').style.display = 'block';
@@ -133,20 +154,21 @@
 
     // フリー便を一番上、その後は出発の早い順
     const arr = data.a.map(it => {
-      const minS = Math.min(...it.r.map(x => toMin(x[1])));
-      const isFree = it.r.some(x => x[0].includes('フリー'));
-      const runMin = it.r.reduce((s, x) => {
-        const st = toMin(x[1]), en = toMin(x[2]);
+      const rs = it.r.map(expandRoute);
+      const minS = Math.min(...rs.map(x => toMin(x.start)));
+      const isFree = rs.some(x => x.name.includes('フリー'));
+      const runMin = rs.reduce((s, x) => {
+        const st = toMin(x.start), en = toMin(x.end);
         return (st < 9999 && en < 9999 && en > st) ? s + (en - st) : s;
       }, 0);
-      return { ...it, minS, isFree, runMin };
+      return { n: it.n, c: it.c, rs, minS, isFree, runMin };
     });
     arr.sort((a,b) => (a.isFree !== b.isFree) ? (a.isFree ? -1 : 1) : a.minS - b.minS);
 
     document.getElementById('list').innerHTML = arr.map(it => {
-      const routes = [...it.r].sort((a,b) => toMin(a[1]) - toMin(b[1]));
+      const routes = [...it.rs].sort((a,b) => toMin(a.start) - toMin(b.start));
       const lines = routes.map((x, i) => {
-        const [name, start, end] = x;
+        const { name, start, end } = x;
         const t = start ? `${start} 〜 ${end}` : '時間未定';
         const free = name.includes('フリー') ? '<span class="free-mark">（フリー）</span>' : '';
         return `<div class="rline">
