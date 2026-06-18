@@ -67,22 +67,32 @@
   .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
   .full { margin-bottom: 12px; }
 
-  /* ── ドライバー・車両のタップ選択 ── */
-  .pick-wrap { margin-bottom: 12px; }
-  .pick-label { font-size: 11px; font-weight: 700; color: var(--gray); margin-bottom: 6px; }
-  .pick-row {
-    display: flex; flex-wrap: wrap; gap: 6px;
-    max-height: 140px; overflow-y: auto;
+  /* ── ドライバー・車両のダイヤル（スクロールホイール） ── */
+  .wheel-field {
+    position: relative; height: 132px;
+    background: #fafafa; border: 1.5px solid #e5e7eb; border-radius: 12px;
+    overflow: hidden;
+  }
+  .wheel {
+    height: 100%; overflow-y: scroll;
+    scroll-snap-type: y mandatory;
     -webkit-overflow-scrolling: touch;
+    text-align: center; scrollbar-width: none;
   }
-  .pick-chip {
-    padding: 9px 13px;
-    border: 1.5px solid #e5e7eb; border-radius: 999px;
-    background: #fff; font: inherit; font-size: 14px; font-weight: 700;
-    color: #374151;
-    -webkit-tap-highlight-color: transparent;
+  .wheel::-webkit-scrollbar { display: none; }
+  .wheel-pad { height: 46px; }
+  .wheel-item {
+    height: 40px; line-height: 40px;
+    scroll-snap-align: center;
+    font-size: 17px; font-weight: 700; color: #9ca3af;
   }
-  .pick-chip.active { background: var(--blue2); color: #fff; border-color: var(--blue2); }
+  .wheel-item.sel { color: #1f2937; }
+  .wheel-center {
+    position: absolute; left: 6px; right: 6px; top: 46px; height: 40px;
+    pointer-events: none;
+    border-top: 1.5px solid #c7d2fe; border-bottom: 1.5px solid #c7d2fe;
+    background: rgba(99,102,241,.06); border-radius: 8px;
+  }
 
   /* ── 便選択 ── */
   .group-title {
@@ -236,13 +246,15 @@
   }
 
   /* 無事故継続日数（控えめな帯） */
+  .safety-wrap { position: relative; margin-bottom: 12px; }
   .safety {
     text-align: center; font-size: 13px; color: #475569; font-weight: 700;
     background: #fff; border: 1px solid #e2e8f0; border-radius: 999px;
-    padding: 8px 14px; margin-bottom: 12px;
+    padding: 8px 14px;
     -webkit-tap-highlight-color: transparent;
   }
   .safety b { color: #0f766e; font-size: 15px; }
+  .safety-date { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: none; padding: 0; }
   .assign-actions { margin-top: 6px; text-align: right; }
 
   /* 最下部フッター（運行時間＋手当 横並び） */
@@ -368,15 +380,18 @@
 <body>
 
 <div class="header">
-  <span class="ver" id="verLabel">v2.2</span>
+  <span class="ver" id="verLabel">v2.3</span>
   <h1>🚌 配車入力（試験版）</h1>
   <p>便をタップして選ぶだけ・データはこの端末に保存</p>
 </div>
 
 <div class="wrap">
 
-  <!-- 無事故継続日数（タップで設定/リセット） -->
-  <div class="safety" id="safety"></div>
+  <!-- 無事故継続日数（タップでカレンダー設定） -->
+  <div class="safety-wrap">
+    <div class="safety" id="safety"></div>
+    <input type="date" id="safetyDate" class="safety-date" />
+  </div>
 
   <!-- 日付 -->
   <div class="card">
@@ -390,12 +405,12 @@
     <div class="row">
       <div>
         <label class="lbl">👤 ドライバー名</label>
-        <select id="fDriver"></select>
+        <div class="wheel-field"><div class="wheel" id="fDriver"></div><div class="wheel-center"></div></div>
         <input type="text" id="fDriverNew" placeholder="新しい名前を入力" autocomplete="off" style="display:none;margin-top:8px;" />
       </div>
       <div>
         <label class="lbl">🚐 車両ナンバー</label>
-        <select id="fCar"></select>
+        <div class="wheel-field"><div class="wheel" id="fCar"></div><div class="wheel-center"></div></div>
         <input type="text" id="fCarNew" placeholder="新しい番号（4桁）" inputmode="numeric" maxlength="4" pattern="\d*" autocomplete="off" style="display:none;margin-top:8px;" />
       </div>
     </div>
@@ -472,7 +487,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-  const APP_VERSION = '2.2';
+  const APP_VERSION = '2.3';
   const STORAGE_KEY = 'haisya_trial_v1';
   const CUSTOM_KEY  = 'haisya_custom_routes_v1';
 
@@ -520,8 +535,10 @@
   const GATE_ROUTES = new Set([
     'フリー便','城南下3上1','福岡下9上6','福岡上8','伊田下1','福間下補助','福岡中央下11上13'
   ]);
-  // ツーマン運行（2名乗務）の便 — 同じ便を2人で担当（同一車両・同時刻が正常）
-  const TWOMAN_ROUTES = new Set(['トーカイ','トーカイ2','トーカイ２']);
+  // 同一車両を複数人で共有する便（重複として警告しない）
+  const SHARED_RUN = new Set(['トーカイ','トーカイ2','トーカイ２']);
+  // ツーマン運行（👥2名と表示する便）— トーカイ2のみ
+  const TWOMAN_ROUTES = new Set(['トーカイ2','トーカイ２']);
 
   // ── ドライバー・車両DB（実績データから学習）──────────
   const DRIVER_SEED = ['本村','坂田','川原','後藤','辻','中村','藤','安河内','高瀬','清原','尾畑','取渕','久野','池田奥','日高','大石','酒井','古賀','新川','佐伯','宮本','百田'];
@@ -566,51 +583,77 @@
   function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
   function dayItems() { return data[$('fDate').value] || []; }
 
-  // ── ドライバー・車両のダイヤル選択（select）──────────
+  // ── ドライバー・車両のダイヤル（スクロールホイール）──
   const NEW_VAL = '__new__';
-  function renderSelects() {
+  const WHEEL_ITEM = 40;
+  let driverVals = [], carVals = [];
+  const wheelLabel = v => v === '' ? '（未選択）' : v === NEW_VAL ? '➕ 新規入力' : v;
+  function buildWheel(el, vals) {
+    el.innerHTML = '<div class="wheel-pad"></div>' +
+      vals.map(v => `<div class="wheel-item">${esc(wheelLabel(v))}</div>`).join('') +
+      '<div class="wheel-pad"></div>';
+  }
+  function wheelIndex(el) { return Math.max(0, Math.round(el.scrollTop / WHEEL_ITEM)); }
+  function wheelHighlight(el) {
+    const items = el.querySelectorAll('.wheel-item');
+    const idx = Math.min(items.length - 1, wheelIndex(el));
+    items.forEach((it,i) => it.classList.toggle('sel', i === idx));
+  }
+  function getWheelVal(el, vals) { return vals[Math.min(vals.length - 1, wheelIndex(el))] ?? ''; }
+  function setWheelVal(el, vals, v) {
+    let idx = vals.indexOf(v); if (idx < 0) idx = 0;
+    el.scrollTop = idx * WHEEL_ITEM;
+    wheelHighlight(el);
+  }
+
+  function renderWheels() {
     const drivers = new Set(DRIVER_SEED);
     const cars = new Set(CAR_SEED);
     Object.values(data).forEach(items => items.forEach(it => {
       if (it.driver) drivers.add(it.driver);
       if (it.car) cars.add(it.car);
     }));
-    const keepD = $('fDriver').value;
-    const keepC = $('fCar').value;
-    $('fDriver').innerHTML =
-      `<option value="">（選択）</option>` +
-      [...drivers].sort((a,b)=>a.localeCompare(b,'ja')).map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('') +
-      `<option value="${NEW_VAL}">➕ 新しい名前を入力</option>`;
-    $('fCar').innerHTML =
-      `<option value="">（選択）</option>` +
-      [...cars].sort((a,b)=>Number(a)-Number(b)).map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('') +
-      `<option value="${NEW_VAL}">➕ 新しい番号を入力</option>`;
-    // 直前の選択を維持
-    if ([...$('fDriver').options].some(o => o.value === keepD)) $('fDriver').value = keepD;
-    if ([...$('fCar').options].some(o => o.value === keepC)) $('fCar').value = keepC;
+    const keepD = driverVals.length ? getWheelVal($('fDriver'), driverVals) : '';
+    const keepC = carVals.length ? getWheelVal($('fCar'), carVals) : '';
+    driverVals = ['', ...[...drivers].sort((a,b)=>a.localeCompare(b,'ja')), NEW_VAL];
+    carVals    = ['', ...[...cars].sort((a,b)=>Number(a)-Number(b)), NEW_VAL];
+    buildWheel($('fDriver'), driverVals);
+    buildWheel($('fCar'), carVals);
+    setWheelVal($('fDriver'), driverVals, driverVals.includes(keepD) ? keepD : '');
+    setWheelVal($('fCar'), carVals, carVals.includes(keepC) ? keepC : '');
   }
-  // 「新規入力」を選んだら手入力欄を出す
-  $('fDriver').addEventListener('change', () => {
-    $('fDriverNew').style.display = ($('fDriver').value === NEW_VAL) ? 'block' : 'none';
-    if ($('fDriver').value === NEW_VAL) $('fDriverNew').focus();
-  });
-  $('fCar').addEventListener('change', () => {
-    $('fCarNew').style.display = ($('fCar').value === NEW_VAL) ? 'block' : 'none';
-    if ($('fCar').value === NEW_VAL) $('fCarNew').focus();
-  });
-  // 値の取得（新規入力中ならそちらを優先）
-  function getDriver() { return $('fDriver').value === NEW_VAL ? $('fDriverNew').value.trim() : $('fDriver').value.trim(); }
-  function getCar()    { return $('fCar').value    === NEW_VAL ? $('fCarNew').value.trim()    : $('fCar').value.trim(); }
-  // 値の設定（一覧にあれば選択、なければ新規入力欄へ）
+
+  // スクロール後に中央の値を確定＆「新規入力」欄の出し入れ
+  function attachWheel(el, getVals, newInputId) {
+    el.addEventListener('scroll', () => {
+      clearTimeout(el._t);
+      el._t = setTimeout(() => {
+        wheelHighlight(el);
+        const v = getWheelVal(el, getVals());
+        $(newInputId).style.display = (v === NEW_VAL) ? 'block' : 'none';
+      }, 90);
+    });
+    el.addEventListener('click', e => {
+      const it = e.target.closest('.wheel-item');
+      if (!it) return;
+      const i = [...el.querySelectorAll('.wheel-item')].indexOf(it);
+      el.scrollTo({ top: i * WHEEL_ITEM, behavior: 'smooth' });
+    });
+  }
+  attachWheel($('fDriver'), () => driverVals, 'fDriverNew');
+  attachWheel($('fCar'), () => carVals, 'fCarNew');
+
+  function getDriver() { const v = getWheelVal($('fDriver'), driverVals); return v === NEW_VAL ? $('fDriverNew').value.trim() : String(v).trim(); }
+  function getCar()    { const v = getWheelVal($('fCar'), carVals);       return v === NEW_VAL ? $('fCarNew').value.trim()    : String(v).trim(); }
   function setDriver(v) {
-    if (v && [...$('fDriver').options].some(o => o.value === v)) { $('fDriver').value = v; $('fDriverNew').style.display='none'; }
-    else if (v) { $('fDriver').value = NEW_VAL; $('fDriverNew').value = v; $('fDriverNew').style.display='block'; }
-    else { $('fDriver').value = ''; $('fDriverNew').value=''; $('fDriverNew').style.display='none'; }
+    if (v && driverVals.includes(v)) { setWheelVal($('fDriver'),driverVals,v); $('fDriverNew').style.display='none'; }
+    else if (v) { setWheelVal($('fDriver'),driverVals,NEW_VAL); $('fDriverNew').value=v; $('fDriverNew').style.display='block'; }
+    else { setWheelVal($('fDriver'),driverVals,''); $('fDriverNew').value=''; $('fDriverNew').style.display='none'; }
   }
   function setCar(v) {
-    if (v && [...$('fCar').options].some(o => o.value === v)) { $('fCar').value = v; $('fCarNew').style.display='none'; }
-    else if (v) { $('fCar').value = NEW_VAL; $('fCarNew').value = v; $('fCarNew').style.display='block'; }
-    else { $('fCar').value = ''; $('fCarNew').value=''; $('fCarNew').style.display='none'; }
+    if (v && carVals.includes(v)) { setWheelVal($('fCar'),carVals,v); $('fCarNew').style.display='none'; }
+    else if (v) { setWheelVal($('fCar'),carVals,NEW_VAL); $('fCarNew').value=v; $('fCarNew').style.display='block'; }
+    else { setWheelVal($('fCar'),carVals,''); $('fCarNew').value=''; $('fCarNew').style.display='none'; }
   }
 
   // ── 便リスト描画 ──────────────────────────────────
@@ -847,7 +890,7 @@
       for (let j = i + 1; j < flat.length; j++) {
         const a = flat[i], b = flat[j];
         // ツーマン運行（同じ便を2名）は重複扱いしない
-        if (a.r.name === b.r.name && TWOMAN_ROUTES.has(a.r.name)) continue;
+        if (a.r.name === b.r.name && SHARED_RUN.has(a.r.name)) continue;
         const sameDriver = a.it.driver === b.it.driver;
         const sameCar    = a.it.car && a.it.car === b.it.car;
         if (!sameDriver && !sameCar) continue;
@@ -983,14 +1026,14 @@
     $('sAllow').textContent  = '¥' + total.toLocaleString();
   }
 
-  function renderAll() { renderSelects(); renderRoutes(); renderList(); renderSummary(); }
+  function renderAll() { renderWheels(); renderRoutes(); renderList(); renderSummary(); }
 
   window.editItem = function(id) {
     const item = dayItems().find(x => x.id === id);
     if (!item) return;
     editingId = id;
     $('formTitle').textContent = `✏️ 編集：${item.driver}`;
-    renderSelects();
+    renderWheels();
     setDriver(item.driver);
     setCar(item.car || '');
     selected = item.routes.map(r => ({...r}));
@@ -1082,7 +1125,7 @@
         return (i !== undefined) ? i : [r.name, r.start, r.end];
       })
     }));
-    const compact = { v: 1, d: $('fDate').value, a };
+    const compact = { v: 1, d: $('fDate').value, sf: localStorage.getItem('haisya_safety_start') || '', a };
     const json = JSON.stringify(compact);
     const b64 = btoa(unescape(encodeURIComponent(json)))
       .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
@@ -1138,17 +1181,16 @@
     let s = localStorage.getItem(SAFE_KEY);
     if (!s) { s = todayISO(); localStorage.setItem(SAFE_KEY, s); }
     const days = Math.max(0, Math.floor((Date.now() - new Date(s + 'T00:00:00').getTime()) / 86400000));
-    $('safety').innerHTML = `🛡️ 無事故継続 <b>${days}</b> 日（${s}〜）`;
+    $('safety').innerHTML = `🛡️ 無事故継続 <b>${days}</b> 日（${s}〜・タップで設定）`;
+    $('safetyDate').value = s;
   }
-  $('safety').onclick = () => {
-    const cur = localStorage.getItem(SAFE_KEY) || todayISO();
-    const v = prompt('無事故スタート日を入力（例：2026-02-15）\n※事故があった場合は今日の日付に入れ替えてリセット', cur);
-    if (v === null) return;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(v.trim())) { toast('日付は 2026-02-15 の形式で入れてね'); return; }
-    localStorage.setItem(SAFE_KEY, v.trim());
+  // カレンダーで開始日を選択（事故があった日に設定すればリセット）
+  $('safetyDate').addEventListener('change', () => {
+    if (!$('safetyDate').value) return;
+    localStorage.setItem(SAFE_KEY, $('safetyDate').value);
     renderSafety();
     toast('🛡️ 無事故記録を更新したよ');
-  };
+  });
 
   // ── 起動 ─────────────────────────────────────────
   $('verLabel').textContent = 'v' + APP_VERSION;

@@ -34,6 +34,7 @@
   }
   .header h1 { font-size: 24px; font-weight: 800; }
   .header .date { font-size: 17px; margin-top: 4px; opacity: .9; font-weight: 700; }
+  .header .vsafety { font-size: 12px; margin-top: 5px; opacity: .8; font-weight: 700; }
 
   .wrap { padding: 16px; max-width: 620px; margin: 0 auto; }
 
@@ -123,6 +124,7 @@
 <div class="header">
   <h1>🚌 配車表</h1>
   <div class="date" id="dateLabel">—</div>
+  <div class="vsafety" id="vsafety"></div>
 </div>
 
 <div class="wrap" id="wrap">
@@ -171,8 +173,10 @@
   ];
   // ゲート車が必要な便（便名の右に「G」表示）
   const GATE = new Set(['フリー便','城南下3上1','福岡下9上6','福岡上8','伊田下1','福間下補助','福岡中央下11上13']);
-  // ツーマン運行（2名乗務）の便
-  const TWOMAN = new Set(['トーカイ','トーカイ2','トーカイ２']);
+  // ツーマン運行（👥2名と表示する便）— トーカイ2のみ
+  const TWOMAN = new Set(['トーカイ2','トーカイ２']);
+  // 同一車両を複数人で共有する便（重複として警告しない）
+  const SHARED = new Set(['トーカイ','トーカイ2','トーカイ２']);
   // 1便分を {name,start,end} に展開（数値=規定便インデックス／配列=臨時便）
   function expandRoute(x) {
     if (Array.isArray(x)) return { name:x[0], start:x[1], end:x[2] };
@@ -185,20 +189,42 @@
     document.getElementById('empty').style.display = 'block';
   } else {
     document.getElementById('dateLabel').textContent = formatDate(data.d);
+    if (data.sf) {
+      const sd = Math.max(0, Math.floor((Date.now() - new Date(data.sf + 'T00:00:00').getTime()) / 86400000));
+      document.getElementById('vsafety').textContent = `🛡️ 無事故継続 ${sd}日`;
+    }
 
-    // 全便を平坦化（車両付き）→ 重複検出に使う
-    const flat = [];
+    // 便ごとの担当数（ツーマンの主担当決定用）
+    const cntByDriver = {};
+    data.a.forEach(a => { cntByDriver[a.n] = (cntByDriver[a.n]||0) + a.r.length; });
+
+    // 全便を平坦化（車両付き）
+    let flat = [];
     data.a.forEach(a => a.r.forEach(rr => {
       const r = expandRoute(rr);
       flat.push({ n:a.n, car:a.c, name:r.name, start:r.start, end:r.end,
-                  s:toMin(r.start), e:toMin(r.end), lv:null });
+                  s:toMin(r.start), e:toMin(r.end), lv:null, partners:null });
     }));
-    // 重複検出：重なり>15分=赤／重なり〜間隔15分以内=黄（ツーマンは除外）
+
+    // ツーマン（トーカイ2）統合：同じ便・同時刻を主担当1人にまとめ、相方を表示
+    const twoG = {};
+    flat.forEach(o => { if (TWOMAN.has(o.name)) { const k=o.name+'@'+o.start+'@'+o.end; (twoG[k]=twoG[k]||[]).push(o); } });
+    const drop = new Set();
+    Object.values(twoG).forEach(g => {
+      const drivers = [...new Set(g.map(x=>x.n))];
+      if (drivers.length < 2) return;
+      drivers.sort((a,b) => (cntByDriver[b]-cntByDriver[a]) || a.localeCompare(b,'ja'));
+      const primary = drivers[0], partners = drivers.slice(1);
+      g.forEach(o => { if (o.n === primary) o.partners = partners; else drop.add(o); });
+    });
+    flat = flat.filter(o => !drop.has(o));
+
+    // 重複検出：重なり>15分=赤／重なり〜間隔15分以内=黄（共有便は除外）
     for (let i=0; i<flat.length; i++) {
       for (let j=i+1; j<flat.length; j++) {
         const a=flat[i], b=flat[j];
         if (a.s>=9999||a.e>=9999||b.s>=9999||b.e>=9999) continue;
-        if (a.name===b.name && TWOMAN.has(a.name)) continue; // ツーマンは正常
+        if (a.name===b.name && SHARED.has(a.name)) continue;
         const sameDriver = a.n===b.n;
         const sameCar = a.car && a.car===b.car;
         if (!sameDriver && !sameCar) continue;
@@ -229,16 +255,18 @@
       // やさしめの注意文（成立する運行だが念のため）
       let banner = '';
       if (it.worst === 'red') {
-        banner = `<div class="vbanner red">🙏 運行時間が一部重なっています。順番にご確認をお願いします</div>`;
+        banner = `<div class="vbanner red">🙏 運行時間が重なっています。慎重に運行し、遅れそうな場合はすぐ輸送へご連絡ください</div>`;
       } else if (it.worst === 'yellow') {
         banner = `<div class="vbanner yellow">🙏 運行の間隔が15分以内に接近しています。お気をつけてお願いします</div>`;
       }
       const lines = it.routes.map((x, i) => {
-        const { name, start, end, car, lv } = x;
+        const { name, start, end, car, lv, partners } = x;
         const t = start ? `${start} 〜 ${end}` : '時間未定';
         const free = name.includes('フリー') ? '<span class="free-mark">（フリー）</span>' : '';
         const gate = GATE.has(name) ? '<span class="gate-badge">G</span>' : '';
-        const two  = TWOMAN.has(name) ? '<span class="twoman-badge">👥 2名乗務</span>' : '';
+        const two  = partners && partners.length
+          ? `<span class="twoman-badge">👥 2名乗務：${esc(partners.join('・'))}</span>`
+          : (TWOMAN.has(name) ? '<span class="twoman-badge">👥 2名乗務</span>' : '');
         const carTag = (multiCar && car) ? `<span class="rcar">🚐 ${esc(car)}</span>` : '';
         return `<div class="rline ${lv||''}">
           <span class="rnum">${'①②③④⑤⑥⑦⑧⑨⑩⑪⑫'[i] || '・'}</span>
