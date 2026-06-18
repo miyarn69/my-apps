@@ -89,6 +89,23 @@
     border-radius: 6px; padding: 1px 10px; margin-left: 8px;
     vertical-align: middle;
   }
+  .twoman-badge {
+    display: inline-block;
+    background: #0ea5e9; color: #fff;
+    font-size: 15px; font-weight: 800;
+    border-radius: 6px; padding: 1px 10px; margin-left: 8px;
+    vertical-align: middle;
+  }
+  .vbanner {
+    font-size: 15px; font-weight: 800; line-height: 1.5;
+    border-radius: 10px; padding: 11px 13px; margin: 4px 0 12px;
+  }
+  .vbanner.red    { background: #fee2e2; color: #b91c1c; }
+  .vbanner.yellow { background: #fef3c7; color: #92400e; }
+  .rline.red    { background: #fff1f2; border-radius: 8px; }
+  .rline.yellow { background: #fffbeb; border-radius: 8px; }
+  .dcard.red    { border-left-color: #dc2626; }
+  .dcard.yellow { border-left-color: #f59e0b; }
 
   .dfoot {
     margin-top: 12px; padding-top: 10px;
@@ -154,6 +171,8 @@
   ];
   // ゲート車が必要な便（便名の右に「G」表示）
   const GATE = new Set(['フリー便','城南下3上1','福岡下9上6','福岡上8','伊田下1','福間下補助','福岡中央下11上13']);
+  // ツーマン運行（2名乗務）の便
+  const TWOMAN = new Set(['トーカイ','トーカイ2','トーカイ２']);
   // 1便分を {name,start,end} に展開（数値=規定便インデックス／配列=臨時便）
   function expandRoute(x) {
     if (Array.isArray(x)) return { name:x[0], start:x[1], end:x[2] };
@@ -167,50 +186,76 @@
   } else {
     document.getElementById('dateLabel').textContent = formatDate(data.d);
 
-    // 同名ドライバーをまとめる（車両を乗り継ぐ場合も1つのカードに）
-    const groups = {};
-    data.a.forEach(it => { (groups[it.n] = groups[it.n] || []).push(it); });
+    // 全便を平坦化（車両付き）→ 重複検出に使う
+    const flat = [];
+    data.a.forEach(a => a.r.forEach(rr => {
+      const r = expandRoute(rr);
+      flat.push({ n:a.n, car:a.c, name:r.name, start:r.start, end:r.end,
+                  s:toMin(r.start), e:toMin(r.end), lv:null });
+    }));
+    // 重複検出：重なり>15分=赤／重なり〜間隔15分以内=黄（ツーマンは除外）
+    for (let i=0; i<flat.length; i++) {
+      for (let j=i+1; j<flat.length; j++) {
+        const a=flat[i], b=flat[j];
+        if (a.s>=9999||a.e>=9999||b.s>=9999||b.e>=9999) continue;
+        if (a.name===b.name && TWOMAN.has(a.name)) continue; // ツーマンは正常
+        const sameDriver = a.n===b.n;
+        const sameCar = a.car && a.car===b.car;
+        if (!sameDriver && !sameCar) continue;
+        const ov = Math.min(a.e,b.e) - Math.max(a.s,b.s);
+        const lv = ov>15 ? 'red' : ov>-15 ? 'yellow' : null;
+        if (!lv) continue;
+        [a,b].forEach(x => { if (lv==='red' || x.lv!=='red') x.lv = lv; });
+      }
+    }
 
-    const arr = Object.entries(groups).map(([n, list]) => {
-      // 各配車の便を車両付きで展開し、時間順にまとめる
-      const routes = list.flatMap(a => a.r.map(expandRoute).map(r => ({ ...r, car: a.c })))
-        .sort((x,y) => toMin(x.start) - toMin(y.start));
-      const cars = [...new Set(list.map(a => a.c).filter(Boolean))];
-      const minS = Math.min(...routes.map(x => toMin(x.start)));
-      const isFree = routes.some(x => x.name.includes('フリー'));
-      const runMin = routes.reduce((s, x) => {
-        const st = toMin(x.start), en = toMin(x.end);
-        return (st < 9999 && en < 9999 && en > st) ? s + (en - st) : s;
-      }, 0);
-      return { n, cars, routes, minS, isFree, runMin };
+    // 同名ドライバーをまとめる
+    const groups = {};
+    flat.forEach(o => { (groups[o.n] = groups[o.n] || []).push(o); });
+
+    const arr = Object.entries(groups).map(([n, routes]) => {
+      routes.sort((x,y) => x.s - y.s);
+      const cars = [...new Set(routes.map(r => r.car).filter(Boolean))];
+      const minS = Math.min(...routes.map(r => r.s));
+      const isFree = routes.some(r => r.name.includes('フリー'));
+      let worst = null;
+      routes.forEach(r => { if (r.lv && (r.lv==='red' || worst!=='red')) worst = r.lv; });
+      return { n, cars, routes, minS, isFree, worst };
     });
     arr.sort((a,b) => (a.isFree !== b.isFree) ? (a.isFree ? -1 : 1) : a.minS - b.minS);
 
     document.getElementById('list').innerHTML = arr.map(it => {
       const multiCar = it.cars.length > 1;
+      // やさしめの注意文（成立する運行だが念のため）
+      let banner = '';
+      if (it.worst === 'red') {
+        banner = `<div class="vbanner red">🙏 運行時間が一部重なっています。順番にご確認をお願いします</div>`;
+      } else if (it.worst === 'yellow') {
+        banner = `<div class="vbanner yellow">🙏 運行の間隔が15分以内に接近しています。お気をつけてお願いします</div>`;
+      }
       const lines = it.routes.map((x, i) => {
-        const { name, start, end, car } = x;
+        const { name, start, end, car, lv } = x;
         const t = start ? `${start} 〜 ${end}` : '時間未定';
         const free = name.includes('フリー') ? '<span class="free-mark">（フリー）</span>' : '';
         const gate = GATE.has(name) ? '<span class="gate-badge">G</span>' : '';
-        // 乗り継ぎがある人は各便に車両を表示
+        const two  = TWOMAN.has(name) ? '<span class="twoman-badge">👥 2名乗務</span>' : '';
         const carTag = (multiCar && car) ? `<span class="rcar">🚐 ${esc(car)}</span>` : '';
-        return `<div class="rline">
+        return `<div class="rline ${lv||''}">
           <span class="rnum">${'①②③④⑤⑥⑦⑧⑨⑩⑪⑫'[i] || '・'}</span>
           <span class="rbody">
-            <span class="rtime">${esc(t)}${carTag}</span>
-            <span class="rname">${esc(name)}${free}${gate}</span>
+            <span class="rtime">${esc(t)}${carTag}${lv?' ⚠️':''}</span>
+            <span class="rname">${esc(name)}${free}${gate}${two}</span>
           </span>
         </div>`;
       }).join('');
-      // 車両ラベル：1台ならそのまま、複数なら「3433 / 4786」
       const carHtml = it.cars.length
         ? `<span class="dcar">🚐 ${esc(it.cars.join(' / '))}</span>` : '';
-      return `<div class="dcard ${it.isFree?'free':''}">
+      return `<div class="dcard ${it.isFree?'free':''} ${it.worst||''}">
         <div class="dhead">
           <span class="dname">${esc(it.n)}</span>
           ${carHtml}
         </div>
+        ${banner}
         ${lines}
       </div>`;
     }).join('');
