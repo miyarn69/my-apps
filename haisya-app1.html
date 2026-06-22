@@ -322,6 +322,15 @@
     font: inherit; font-size: 13px;
   }
 
+  /* 金額の表示/非表示 */
+  body.money-hidden .money { display: none !important; }
+  .money-toggle {
+    background: #eef2ff; color: var(--blue2);
+    border: 1.5px solid #c7d2fe; border-radius: 999px;
+    font: inherit; font-size: 12px; font-weight: 800;
+    padding: 6px 14px; -webkit-tap-highlight-color: transparent;
+  }
+
   .day-summary {
     display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
     margin-bottom: 14px;
@@ -380,7 +389,7 @@
 <body>
 
 <div class="header">
-  <span class="ver" id="verLabel">v2.4</span>
+  <span class="ver" id="verLabel">v2.6</span>
   <h1>🚚 配車入力（試験版）</h1>
   <p>便をタップして選ぶだけ・データはこの端末に保存</p>
 </div>
@@ -451,10 +460,13 @@
   </div>
 
   <!-- 一覧 -->
+  <div style="text-align:right; margin-bottom:8px;">
+    <button id="moneyToggle" class="money-toggle">💴 金額を表示</button>
+  </div>
   <div class="day-summary">
     <div class="stat"><small>ドライバー数</small><strong id="sCount">0</strong></div>
     <div class="stat"><small>便数合計</small><strong id="sRoutes">0</strong></div>
-    <div class="stat"><small>手当合計</small><strong id="sAllow">¥0</strong></div>
+    <div class="stat money-stat"><small>手当合計</small><strong id="sAllow">🔒</strong></div>
   </div>
 
   <button class="share-btn" id="shareViewBtn">📲 ドライバー用ページを作成（LINE共有）</button>
@@ -487,7 +499,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-  const APP_VERSION = '2.5';
+  const APP_VERSION = '2.6';
   const STORAGE_KEY = 'haisya_trial_v1';
   const CUSTOM_KEY  = 'haisya_custom_routes_v1';
 
@@ -528,6 +540,9 @@
     { name:'福岡上14',           start:'19:45', end:'21:15', allowance:4000, group:'evening' },
     { name:'直方下3上2',         start:'',      end:'',      allowance:5000, group:'evening' },
     { name:'フリー便',           start:'11:00', end:'21:00', allowance:9000, group:'day' },
+    { name:'早良南下4上3',       start:'14:59', end:'19:05', allowance:4000, group:'evening' },
+    { name:'博多上11',           start:'19:25', end:'20:30', allowance:4000, group:'evening' },
+    { name:'博多下12上15',       start:'20:59', end:'22:50', allowance:4000, group:'evening' },
   ];
   const MASTER_NAMES = new Set(ROUTE_MASTER.map(r => r.name));
 
@@ -681,12 +696,14 @@
           <span class="r-name">${esc(r.name)}</span><br>
           <span class="r-time">${time}${used&&!sel?'　※配車済':''}</span>
         </span>
-        <span style="display:flex;align-items:center;">${del}<span class="r-badge ${aCls}">¥${r.allowance.toLocaleString()}</span></span>
+        <span style="display:flex;align-items:center;">${del}<span class="r-badge money ${aCls}">¥${r.allowance.toLocaleString()}</span></span>
       </div>`;
     };
 
     let html = groups.map(g => {
-      const btns = ROUTE_MASTER.filter(r => r.group === g.key).map(r => btnHtml(r, false)).join('');
+      const btns = ROUTE_MASTER.filter(r => r.group === g.key)
+        .slice().sort((a,b) => toMin(a.start) - toMin(b.start))
+        .map(r => btnHtml(r, false)).join('');
       return `<div class="group-title ${g.cls}">${g.label}</div>${btns}`;
     }).join('');
 
@@ -767,7 +784,7 @@
     }
     $('selBox').innerHTML = selected.map((r,i) => {
       const amt = r.rinji
-        ? `<span class="amt" onclick="event.stopPropagation();editSelAllow(${i})">¥${r.allowance.toLocaleString()} ✏️</span>`
+        ? `<span class="amt money" onclick="event.stopPropagation();editSelAllow(${i})">¥${r.allowance.toLocaleString()} ✏️</span>`
         : '';
       return `<span class="chip ${r.rinji?'rinji':''}">${r.rinji?'⚡':''}${esc(r.name)}${amt}<button onclick="removeSel(${i})">✕</button></span>`;
     }).join('');
@@ -1014,7 +1031,7 @@
         ${blocks}
         <div class="driver-foot">
           <span class="run-time">${runLabel}</span>
-          <span class="driver-total">手当 ¥${g.total.toLocaleString()}</span>
+          <span class="driver-total money">手当 ¥${g.total.toLocaleString()}</span>
         </div>
       </div>`;
     }).join('');
@@ -1026,7 +1043,8 @@
     $('sCount').textContent  = drivers.size;
     $('sRoutes').textContent = items.reduce((s,i) => s + i.routes.length, 0);
     const total = items.reduce((s,i) => s + i.routes.reduce((a,r) => a + (r.allowance||0), 0), 0);
-    $('sAllow').textContent  = '¥' + total.toLocaleString();
+    const moneyShown = localStorage.getItem('haisya_show_money') === '1';
+    $('sAllow').textContent  = moneyShown ? '¥' + total.toLocaleString() : '🔒';
   }
 
   function renderAll() { renderWheels(); renderRoutes(); renderList(); renderSummary(); }
@@ -1224,7 +1242,22 @@
   renderSafety();
   $('fDate').value = todayISO();
   $('fDate').addEventListener('change', () => { clearForm(); renderAll(); });
+
+  // ── 金額の表示/非表示（既定は非表示・モニターでドライバーに見せない）──
+  function applyMoney() {
+    const show = localStorage.getItem('haisya_show_money') === '1';
+    document.body.classList.toggle('money-hidden', !show);
+    $('moneyToggle').textContent = show ? '💴 金額を隠す' : '💴 金額を表示';
+    renderSummary();
+  }
+  $('moneyToggle').onclick = () => {
+    const show = localStorage.getItem('haisya_show_money') === '1';
+    localStorage.setItem('haisya_show_money', show ? '0' : '1');
+    applyMoney();
+  };
+
   renderAll();
+  applyMoney();
 </script>
 </body>
 </html>
