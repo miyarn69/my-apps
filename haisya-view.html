@@ -238,7 +238,8 @@
 
     // ツーマン（トーカイ2）統合：同じ便・同時刻を主担当1人にまとめ、相方を表示
     const twoG = {};
-    flat.forEach(o => { if (TWOMAN.has(o.name)) { const k=o.name+'@'+o.start+'@'+o.end; (twoG[k]=twoG[k]||[]).push(o); } });
+    // 便名だけでまとめる（日高と池田奥でトーカイの時間が多少違っても同じ便として統合）
+    flat.forEach(o => { if (TWOMAN.has(o.name)) { (twoG[o.name]=twoG[o.name]||[]).push(o); } });
     const drop = new Set();
     Object.values(twoG).forEach(g => {
       const drivers = [...new Set(g.map(x=>x.n))];

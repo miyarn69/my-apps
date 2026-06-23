@@ -389,7 +389,7 @@
 <body>
 
 <div class="header">
-  <span class="ver" id="verLabel">v2.9</span>
+  <span class="ver" id="verLabel">v3.0</span>
   <h1>🚚 配車入力（試験版）</h1>
   <p>便をタップして選ぶだけ・データはこの端末に保存</p>
 </div>
@@ -499,7 +499,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-  const APP_VERSION = '2.9';
+  const APP_VERSION = '3.0';
   const STORAGE_KEY = 'haisya_trial_v1';
   const CUSTOM_KEY  = 'haisya_custom_routes_v1';
 
@@ -647,20 +647,23 @@
     setWheelVal($('fCar'), carVals, carVals.includes(keepC) ? keepC : '');
   }
 
-  // カリカリ音（ダイヤルが1つ進むたびに鳴らす）
+  // 時計のダイヤルのような「カチッ」音（1つ進むたびに鳴らす）
   let _ac;
   function playTick() {
     try {
       _ac = _ac || new (window.AudioContext || window.webkitAudioContext)();
       if (_ac.state === 'suspended') _ac.resume();
-      const o = _ac.createOscillator(), g = _ac.createGain();
-      o.type = 'square'; o.frequency.value = 900;
-      g.gain.value = 0.05;
-      o.connect(g); g.connect(_ac.destination);
       const t = _ac.currentTime;
-      o.start(t);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.025);
-      o.stop(t + 0.03);
+      // ごく短い減衰ノイズ＝機械的なクリック音
+      const dur = 0.013;
+      const buf = _ac.createBuffer(1, Math.max(1, Math.ceil(_ac.sampleRate * dur)), _ac.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2);
+      const src = _ac.createBufferSource(); src.buffer = buf;
+      const bp = _ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2200; bp.Q.value = 1.2;
+      const g = _ac.createGain(); g.gain.value = 0.18;
+      src.connect(bp); bp.connect(g); g.connect(_ac.destination);
+      src.start(t);
     } catch {}
   }
 
