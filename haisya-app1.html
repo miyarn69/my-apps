@@ -389,7 +389,7 @@
 <body>
 
 <div class="header">
-  <span class="ver" id="verLabel">v3.1</span>
+  <span class="ver" id="verLabel">v3.3</span>
   <h1>🚚 配車入力（試験版）</h1>
   <p>便をタップして選ぶだけ・データはこの端末に保存</p>
 </div>
@@ -499,7 +499,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-  const APP_VERSION = '3.1';
+  const APP_VERSION = '3.3';
   const STORAGE_KEY = 'haisya_trial_v1';
   const CUSTOM_KEY  = 'haisya_custom_routes_v1';
 
@@ -679,14 +679,11 @@
         $(newInputId).style.display = (v === NEW_VAL) ? 'block' : 'none';
       }, 90);
     });
-    // PCのマウス/トラックパッド：1ノッチ＝1つだけ進める（重め・誤爆防止）
+    // PCのマウス/トラックパッド：指の動きにそのまま追従（ぬるっと）・速度は控えめ
+    // → 止めると scroll-snap でピタッと中央に吸着する
     el.addEventListener('wheel', e => {
       e.preventDefault();
-      if (el._wlock) return;
-      el._wlock = true; setTimeout(() => el._wlock = false, 110);
-      const max = el.querySelectorAll('.wheel-item').length - 1;
-      const next = Math.min(max, Math.max(0, wheelIndex(el) + (e.deltaY > 0 ? 1 : -1)));
-      el.scrollTo({ top: next * WHEEL_ITEM, behavior: 'smooth' });
+      el.scrollTop += e.deltaY * 0.45;
     }, { passive: false });
     el.addEventListener('click', e => {
       const it = e.target.closest('.wheel-item');
